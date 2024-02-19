@@ -1,3 +1,47 @@
+Based on work - Feb 18 [[todo]]
+1. Set RF = 30MHz, and find the corresponding $V_{peak}$ that gives $f_{pp,y} \approx f_{pp,z} \approx 3MHz$. (Radial frequencies)
+	- Using the freqs_pp calculation, we find that the required curvature for 3MHz is:
+		- $u_r = \frac{\omega_r^2 m}{e} \approx \frac{(2\pi \times 3\times10^6)^2(40 * 1.67 \times 10^{-27})}{1.6\times10^{-19}}$
+
+2. Work backward to find the $V_{dc}$ that gives $f_{dc, x} \approx 1MHz$.
+	1. Have curvatures corresponding to (+2, -1, -1).
+	2. $V_{dc}$ simply scales this curvature.
+		1. Need analytical expression for this?
+		2. $\omega_x = \sqrt{\frac{eu_x}{m}} \implies u_x = \frac{\omega_x^2 m}{e} \approx \frac{(2\pi \times 10^6)^2(40 * 1.67 \times 10^{-27})}{1.6\times10^{-19}}$
+3. Compare 5 & 7 electrodes-a-side.
+	1. Does one require lower voltages than the other? Constraint is 10V peak.
+
+
+Jan 1, 2024
+- Currently debugging why different configurations don't result in the expected metastable potential along z-axis.
+- Steps so far:
+	- Extending measurement axis along z-direction reveals that the turnaround point occurs around 100µm to 300µm for an applied unit voltage.
+
+
+
+I utilized the NIST Electrode Python package to generate voltage sets for ion confinement in a surface-electrode ion trap. The results demonstrated that it was possible to obtain reasonable trap depth through techniques described in Allcock et. al.. I also worked with Andrea, my partner on this project, to compare different methods (Python vs COMSOL) for generating analytical solutions for the trap. Concurrently, I set up the beam path for a fiber noise cancelation system using optics equipment and RF signal modulation equipment; I was able to characterize the output signal from the interfered beams.
+
+Discussion Nov 13, 2023
+- Fixed bugs in fitting code
+	- Was previously using y-axis values to fit z, that's fixed
+	- Fixed ```A_grouped``` usage in the linear solver, it should be the transpose instead
+- Realizations about Allcock paper
+	- 6 voltage groups are used because there are 6 degrees of freedom in the coefficients (x1, x2, y1, y2, z1, z2)
+	- This allows a square matrix to be formed and can be solved using a linear solver
+- Observations
+	- Symmetry in the electrode contributions to potential curvature is present
+	- Using these symmetries, the coefficients may cancel out depending on grouping
+		- Example: first order x-dependence vanishes with symmetric grouping for axial voltage set 
+		- Groupings that result in complete cancelation reduce the degrees of freedom
+	- Therefore the ability to use the linear solver depends heavily on which grouping is used
+- Ideas
+	- Utilize only the 2nd order coefficients for the linear solver when dealing with endcap voltages
+		- Does this sacrifice anything by way of neglecting the first order coefficients?
+- Questions
+	- Why does the z-axis potential slope up and then decrease when moving along the +z direction?
+		- Seems that this makes sense as the field lines point into the trap surface when near the surface, and point away as you move up above the surface
+	- 
+
 Oct 25
 
 

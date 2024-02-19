@@ -1,0 +1,7 @@
+{
+    "python.analysis.extraPaths": [
+        "deps/pytrans",
+        ".venv/"
+    ],
+    "editor.formatOnSave": true
+}

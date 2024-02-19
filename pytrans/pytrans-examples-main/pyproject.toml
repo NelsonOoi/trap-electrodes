@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "pytrans-examples"
+version = "0.1.0"
+description = "Examples and showcase repo for waveform generation with pytrans"
+authors = ["Carmelo Mordini <carmelo.mordini@gmail.com>"]
+packages = [
+     { include = "models" },
+  ]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+ipykernel = "^6.9.0"
+rectset = "^1.0.1"
+qinterp = {git = "https://github.com/carmelom/qinterp.git"}
+pytrans = {git = "https://github.com/tiqi-group/pytrans.git"}
+
+[tool.poetry.group.dev.dependencies]
+autopep8 = "^1.7.0"
+flake8 = "^5.0.4"
+mypy = "^1.0.1"
+pytest = "^7.2.2"
+nbmake = "^1.4.6"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
