@@ -1,3 +1,4 @@
+
 Based on work - Feb 18 [[todo]]
 1. Set RF = 30MHz, and find the corresponding $V_{peak}$ that gives $f_{pp,y} \approx f_{pp,z} \approx 3MHz$. (Radial frequencies)
 	- Using the freqs_pp calculation, we find that the required curvature for 3MHz is:
