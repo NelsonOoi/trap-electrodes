@@ -1,9 +1,23 @@
+Electrode simulation goals
+- trap chip gds parser
+	- maps electrode names to polygons
+- finds curvatures directly from individual electrode potentials
+- solves for basis voltage sets
+	- axial
+	- x,y-comp
+	- tilt at user specified angle
+- target frequencies
+- radial mode breaking degeneracy
+- transport waveforms
+- export
+	- coefficient fits
+	- basis voltage sets
+	- overall tilt+confining voltage sets
 
 Based on work - Feb 18 [[todo]]
 1. Set RF = 30MHz, and find the corresponding $V_{peak}$ that gives $f_{pp,y} \approx f_{pp,z} \approx 3MHz$. (Radial frequencies)
 	- Using the freqs_pp calculation, we find that the required curvature for 3MHz is:
 		- $u_r = \frac{\omega_r^2 m}{e} \approx \frac{(2\pi \times 3\times10^6)^2(40 * 1.67 \times 10^{-27})}{1.6\times10^{-19}}$
-
 2. Work backward to find the $V_{dc}$ that gives $f_{dc, x} \approx 1MHz$.
 	1. Have curvatures corresponding to (+2, -1, -1).
 	2. $V_{dc}$ simply scales this curvature.
