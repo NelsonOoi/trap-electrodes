@@ -20,98 +20,112 @@ import shapely.ops as so
 import shapely as sh
 import time
 
-def load_trap(filename='./single_chip.gds', electrode_layer=37, ito_layer=None, datatype=0, plot=True, xlim=(1000,10000), ylim=(2420,8000), show=True):
+def load_trap(filename='./single_chip.gds', electrode_layer=37,
+              ito_layer=None, datatype=0, plot=True,
+              xlim=(1000,10000), ylim=(2420,8000),
+              electrode_mapping={}, electrode_ordering=[], trap_center=[0, 0], buildup=True):
     trap = gdspy.GdsLibrary(infile=filename)
     main_cell = trap.top_level()[0]
     pol_dict = main_cell.get_polygons(by_spec=True)
     # electrode patterned layer = 37 for quetzal
     electrode_polygons = pol_dict[(electrode_layer, datatype)]
-
     ito_polygons = []
+    el_list_prev = []
+    el_list_current = []
+    el_dict = {}
     if(ito_layer is not None):
         ito_polygons = pol_dict[(ito_layer, datatype)]
+    
+
+    # iterative merge.
+    # treat ito and electrode parts as the same.
+    shapes = [*electrode_polygons, *ito_polygons]
+
+    # cast to shapely polygons
+    for shape in shapes:
+        el = sg.Polygon(shape)
+        el_list_current.append(el)
+    # iterative merge.
+    # only merge until no further changes occur.
+    while (el_list_prev != el_list_current):
+        n_el = len(el_list_current)
+        el_list_prev = el_list_current
+        el_list_current = []
+        is_merged = np.zeros(n_el)
+
+        # merge forward.
+        # i.e. if other polygons later in the list are merged
+        # in an earlier step, do not merge them later on
+        for i in range(0, n_el):
+            if(is_merged[i] == 0):
+                el = el_list_prev[i]
+                for j in range(i+1, n_el):
+                    if (sh.overlaps(el, el_list_prev[j]) and is_merged[j] == 0):
+                        el = so.unary_union([el, el_list_prev[j]])
+                        is_merged[j] = 1
+                el_list_current.append(el)
+
+    # plot shapely polygons
     if (plot):
         plt.ion()
         fig, ax = plt.subplots(figsize=(8, 8))
-        # # el = Polygon(polygons[0], closed=False)
-        # # ax.add_patch(el)
         ax.set_xlim(xlim[0], xlim[1])
         ax.set_ylim(ylim[0], ylim[1])
         ax.set_aspect('equal', adjustable='box')
+    
+    n_el = len(el_list_current)
+    temp_names = np.arange(1, n_el+1)
+    for i in range(n_el):
+        # # el = Polygon(polygons[0], closed=False)
+        # # ax.add_patch(el)
+        # patch = ax.add_patch(el)
+        # patch = plt.gca().add_patch(el)
+        # print(sg.mapping(el)['coordinates'][0])
+        # print(np.array(sg.mapping(el)['coordinates'][0]) - np.array([10000, 1000]))
+        el = el_list_current[i]
+        el_coordinates = np.array(sg.mapping(el).get('coordinates')[0]) - np.array(trap_center)
+        el = sh.affinity.translate(el, xoff=-trap_center[0], yoff=-trap_center[1])
 
-        el_list = []
-        # go through all electrodes and add any overlapping ITO 
-        '''
-        for electrode_part in electrode_polygons:
-            # el = Polygon(shape, closed=False)
-            print(electrode_part)
-            el = sg.Polygon(electrode_part)
+        name = str(temp_names[i])
+        if (electrode_mapping != {}):
+            name = str(electrode_mapping.get(name))
+        
+        if(name not in el_dict.keys()):
+            el_dict[name] = [el_coordinates]
+        else:
+            el_dict.get(name).append(el_coordinates)
 
-            # merge with ITO layer to form complete electrode
-            for ito_part in ito_polygons:
-                ito = sg.Polygon(ito_part)
-                if (sh.overlaps(el, ito)):
-                    el = so.unary_union([el, ito])
-            print(el)
-            el_list.append(el)
-        '''
+        # if(name in el_dict.keys() and el_dict.get(name) is not None):
+        #     print(el_dict.get(name))
+            # el_dict[name] = el_dict.get(name).append(el_coordinates)
+        # else:
+            # el_dict[name] = [el_coordinates]
         
-        # Merge all electrodes which are now connected after previous merge stage
-        # this should be an iterative/recursive flood fill,
-        # it should terminate only if no other changes occur
-        # but we keep it simple for now and merge twice
-        # assume that ito can at most merge two electrode parts
-        # this is a reasonable assumption for quetzal
-        '''
-        el_list_final = []
-        n_el = len(el_list)
-        for i in range(0, n_el):
-            el = el_list[i]
-            for j in range(i+1, n_el):
-                if (sh.overlaps(el, el_list[j])):
-                    el = so.unary_union([el, el_list[j]])
-            el_list_final.append(el)
-        '''
-        shapes = [*electrode_polygons, *ito_polygons]
-        el_list_prev = []
-        el_list_current = []
-        # treat ito and electrode parts as the same. (test)
-        for shape in shapes:
-            el = sg.Polygon(shape)
-            el_list_current.append(el)
-        while (el_list_prev != el_list_current):
-            print('unmatched')
-            n_el = len(el_list_current)
-            el_list_prev = el_list_current
-            el_list_current = []
-            is_merged = np.zeros(n_el)
-            for i in range(0, n_el):
-                if(is_merged[i] == 0):
-                    el = el_list_prev[i]
-                    for j in range(i+1, n_el):
-                        # if (sh.overlaps(el, el_list_prev[j])):
-                        if (sh.overlaps(el, el_list_prev[j]) and is_merged[j] == 0):
-                            el = so.unary_union([el, el_list_prev[j]])
-                            is_merged[j] = 1
-                    el_list_current.append(el)
-            
-        
-        # print(el_list_final)
-        # for el in el_list_final:
-        for el in el_list_current:
-            # print(el)
-            # print(sh.overlaps(el, el))
+        if (plot):
             xs, ys = el.exterior.xy 
             ax.fill(xs, ys, alpha=0.5, fc='r', ec='none')
-            # patch = ax.add_patch(el)
-            # patch = plt.gca().add_patch(el)
             d = fig.canvas.draw() 
             e = fig.canvas.flush_events()
-            # name = input('electrode name:')
-            if show:
-                time.sleep(0.5)
+            if (buildup):
+                time.sleep(0.1)
+            ax.text(xs[0], ys[0], name, size=5)
+    
+    electrodes = list(el_dict.items())
+    if(electrode_ordering != []):
+        electrodes = []
+        for name in electrode_ordering:
+            electrodes.append((name, el_dict.get(name)))
+    if(plot):
         plt.ioff()
         plt.show()
+
+    s = System([PolygonPixelElectrode(name=n, paths=map(np.array, p))
+                for n, p in electrodes])
+    # plt.figure()
+    # fig, ax = plt.subplots(1, 2, figsize=(15,10))
+    # s.plot(ax[0])
+    # plt.show()
+    return s, electrodes, el_dict
 
 def trap(spacing,
         gnd_width, gnd_height, gnd_start_pos,
@@ -222,7 +236,7 @@ def trap(spacing,
 
 def save_trap(el_map, name='quetzal'):
     '''
-    Saves tarp as a JSON file.
+    Saves trap as a JSON file.
     Keys are electrode names.
     Values are electrode polygons.
     '''
