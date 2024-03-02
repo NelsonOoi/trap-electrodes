@@ -19,11 +19,19 @@ import shapely.geometry as sg
 import shapely.ops as so
 import shapely as sh
 import time
+import os
 
+'''
+Loads trap from GDS.
+
+Returns:
+System of electrodes - derived from Electrode package
+'''
 def load_trap(filename='./single_chip.gds', electrode_layer=37,
               ito_layer=None, datatype=0, plot=True,
               xlim=(1000,10000), ylim=(2420,8000),
               electrode_mapping={}, electrode_ordering=[], trap_center=[0, 0], buildup=True):
+    filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
     trap = gdspy.GdsLibrary(infile=filename)
     main_cell = trap.top_level()[0]
     pol_dict = main_cell.get_polygons(by_spec=True)
@@ -245,6 +253,37 @@ def save_trap(el_map, name='quetzal'):
     with open(str(name) + ".json", "w") as outfile: 
         json.dump(el_dict, outfile)
 
+def get_axes_potentials(s, length=20, res=10001, shift={'z': 0}, tilt_theta=0):
+    '''
+    Define axes and retrieve potentials along each axis.
+
+    Inputs:
+    - System of electrodes
+    - Length of axis
+    - Resolution along each axis
+    - Directional shift
+    - Tilt of y,z-axes
+    '''
+
+    # create fit axes
+    x3d, x = single_axis('x', bounds=(-length/2,length/2), res=res, shift=shift)
+    y3d, y = single_axis('y', bounds=(-length/2,length/2), res=res, shift=shift)
+    z3d, z = single_axis('z', bounds=(-length/2,length/2), res=res, shift=shift)
+
+    if(tilt_theta != 0):
+        y3d, y = tilt_single_axis(tilt_theta, 'y_prime', bounds=(-length/2,length/2), res=res, shift=shift)
+        z3d, z = tilt_single_axis(tilt_theta, 'z_prime', bounds=(-length/2,length/2), res=res, shift=shift)
+
+    # find individual potential contributions
+    p_x = s.individual_potential(x3d, 0)
+    p_y = s.individual_potential(y3d, 0)
+    p_z = s.individual_potential(z3d, 0)
+
+    return [x, y, z, p_x, p_y, p_z]
+
+'''
+Helper function for solving polynomal coefficients.
+'''
 def solve_axes_coeffs(axis, p, order=0):
     '''
     Fit 2nd order polynomial for 1 electrode along 1 axis
@@ -264,9 +303,12 @@ def solve_axes_coeffs(axis, p, order=0):
     c_arr.append(c)
     return c_arr, A, residuals[0]
 
-def solve_electrode_contributions(s, x, y, z, p_x, p_y, p_z, do_plot=True):
-    overall_fitted_coeffs = []
-    overall_residuals = []
+def get_electrode_curvatures(s, x, y, z, p_x, p_y, p_z, ion_height,
+                             filename=str(datetime.now().strftime('%Y-%m-%d-%H-%M-%S')) + '_gds_quetzal.csv',
+                             plot=False):
+    filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
+    fitted_coeffs = []
+    residuals = []
     z_new = z
     axes = {'x': x, 'y': y, 'z': z}
     fit_order = 2
@@ -276,7 +318,7 @@ def solve_electrode_contributions(s, x, y, z, p_x, p_y, p_z, do_plot=True):
         # measured = {'x': p_x[electrode_num].flatten(), 'y': p_y[electrode_num].flatten()}
         measured = {'x': p_x[electrode_num].flatten(), 'y': p_y[electrode_num].flatten(), 'z': p_z[electrode_num].flatten()}
         num_axes = len(axes)
-        if (do_plot):
+        if (plot):
             fig_width = 15
             fig, ax = plt.subplots(1, num_axes, figsize=(fig_width, 1/2*fig_width))
             ax = ax.flat
@@ -293,20 +335,22 @@ def solve_electrode_contributions(s, x, y, z, p_x, p_y, p_z, do_plot=True):
             electrode_residuals.append(residual)
             # get predicted result
             predicted = np.dot(A, np.array(c_arr).T)
-            if (do_plot):
+            if (plot):
                 # plot numerical solution
                 ax[i].set_xlabel('µm')
                 if(i == 2):
                     ax[i].set_title(f'Voltage along {ax_name}')
                 else:
-                    ax[i].set_title(f'Voltage along {ax_name}, at z = {z_h}µm')
+                    ax[i].set_title(f'Voltage along {ax_name}, at z = {ion_height}µm')
                 ax[i].plot(ax_coord, measured[ax_name], label='Measured')
                 # plot predicted fit
                 ax[i].plot(ax_coord, predicted, label=f'Predicted, residual: {residual_str}')
                 ax[i].grid()
                 ax[i].legend()
-        overall_fitted_coeffs.append(np.array(electrode_coeffs).flatten())
-        overall_residuals.append(np.array(electrode_residuals))
+        if(plot):
+            plt.show()
+        fitted_coeffs.append(np.array(electrode_coeffs).flatten())
+        residuals.append(np.array(electrode_residuals))
 
     # generate columns
     columns = ['id']
@@ -317,24 +361,34 @@ def solve_electrode_contributions(s, x, y, z, p_x, p_y, p_z, do_plot=True):
         columns.append('residuals_' + str(i))
     # generate pandas csv file
     # print(overall_residuals)
-    savefile = np.concatenate((np.array([s.names]).T, np.array(overall_fitted_coeffs), np.array(overall_residuals)), axis=1)
+    savefile = np.concatenate((np.array([s.names]).T, np.array(fitted_coeffs), np.array(residuals)), axis=1)
     df = pd.DataFrame(savefile, columns=columns)
-    df.to_csv('test_'+ str(datetime.now()) + '_coefficients_quetzal_test_small.csv')
+    df.to_csv(filename)
     print(columns)
+    return [fitted_coeffs, residuals]
 
-def solve_voltages(el_names, fitted_coeffs, b, groups):
+def load_coeffs(filename):
+    filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
+    df = pd.read_csv(filename, usecols=['c_x0', 'c_x1', 'c_x2', 'c_y0', 'c_y1', 'c_y2', 'c_z0', 'c_z1', 'c_z2'])
+    print(df)
+    # df_new = df[['cx_1', 'cx_2', 'cy_1', 'cy_2', 'cz_1', 'cz_2']]
+    return df.to_numpy()
+
+def solve_voltages(el_names, fitted_coeffs, target_curvature, groups, filename):
     '''
     Solves for electrode potentials.
     Inputs:
     - List of electrode names.
     - Fitted coefficients under unit voltage electrodes.
     '''
+    filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
     A = np.array(fitted_coeffs)
     # remove constant terms from matrix
     A = np.delete(A, [0, 3, 6], 1)
     # remove rf and gnd electrodes
     A = np.delete(A, [-1, -2], 0)
-    b = np.array(b)
+    # convert from 2nd order curvature to coefficients
+    target_coeffs = np.array(target_curvature)/2
 
     A_grouped = []
     for group in groups:
@@ -345,14 +399,59 @@ def solve_voltages(el_names, fitted_coeffs, b, groups):
     A_grouped = np.array(A_grouped)
     A_grouped[np.abs(A_grouped)<1e-17] = 0
 
-    group_voltages = np.linalg.solve(A_grouped.T, b)
-    return group_voltages
+    group_voltages = np.linalg.solve(A_grouped.T, target_coeffs)
+
+    electrode_voltages = np.zeros(len(el_names))
+    for i in range(len(groups)):
+        for electrode_name in groups[i]:
+            electrode_voltages[el_names.index(electrode_name)] = group_voltages[i]
+
+    # save generated voltages to csv
+    el_df = pd.DataFrame(electrode_voltages.T, columns=["V"])
+    el_df.to_csv(filename)
+    return electrode_voltages, group_voltages
+
+def plot_fitted_curvature(s, electrode_voltages, target_curvature, ion_height,
+                          length=20, res=10001, shift={'z': 0}):
+    x3d, x = single_axis('x', bounds=(-length/2,length/2), res=res, shift=shift)
+    y3d, y = single_axis('y', bounds=(-length/2,length/2), res=res, shift=shift)
+    z3d, z = single_axis('z', bounds=(-length/2,length/2), res=res, shift=shift)
+
+    with s.with_voltages(electrode_voltages):
+        vx = s.electrical_potential(x3d).T
+        vy = s.electrical_potential(y3d).T
+        vz = s.electrical_potential(z3d).T
+        
+        fig, ax = plt.subplots(1, 3, figsize=(15,5))
+        ax = ax.flat
+        ax[0].plot(x, vx[0], label='Electrode contribution')
+        ax[0].plot(x, target_curvature[1] * x**2 +vx[0][int((vx.size+1)/2)], label='Allcock curvature')
+        ax[0].set_title('x-axis')
+        ax[1].plot(y, vy[0], label='Electrode contribution')
+        ax[1].plot(y, target_curvature[3] * y**2 +vy[0][int((vy.size+1)/2)], label='Allcock curvature')
+        ax[1].set_title('y-axis')
+        ax[2].plot(z+ion_height, vz[0], label='Electrode contribution')
+        ax[2].set_title('z-axis')
+        ax[2].axvline(x=ion_height, linestyle='--', color='r')
+        ax[2].plot(z+ion_height, target_curvature[-1] * z**2 +vz[0][int((vz.size+1)/2)], label='Allcock curvature')
+        for i in range(3):
+            ax[i].set_xlabel('µm')
+            ax[i].set_ylabel('V')
+            ax[i].legend()
+        plt.show()
 
 def solve_freqs(s, f_rad = 3e6, f_axial = 1e6, f_traprf = 30e6,
                 m = 40*ct.atomic_mass, q = 1*ct.elementary_charge,
                 l = 1e-6, u_dc_ref = [0, 4e-6, 0, -2e-6, 0, -2e-6],
                 dc_axial_set_file="Vs_2024-02-18_axial.csv",
                 do_plot_potential=True):
+
+    '''
+    Solves for frequencies in axial and radial directions.
+    '''
+
+    dc_axial_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/' + dc_axial_set_file
+
     # 3 MHz radial frequency default target
     o_rad = 2 * np.pi * f_rad
     # 1 MHz axial frequency default target
@@ -473,7 +572,7 @@ def solve_freqs(s, f_rad = 3e6, f_axial = 1e6, f_traprf = 30e6,
         # uncomment for static & mathieu analysis
         rf_scale = s.rf_scale(m, q, l, o_traprf)
         mu, b = s.mathieu(x0, scale=rf_scale, r=4, sorted=True)
-        freqs = mu[:3].imag*o/(2*np.pi)
+        freqs = mu[:3].imag*o_traprf/(2*np.pi)
         modes = b[len(b)//2 - 3:len(b)//2, :3].real
         for i in range(len(freqs)):
             print(f"Mathieu frequency {i+1}:", freqs[i]/1e6, "MHz", modes[i])
@@ -482,7 +581,7 @@ def solve_freqs(s, f_rad = 3e6, f_axial = 1e6, f_traprf = 30e6,
             print(line)
         '''
         if(do_plot_potential):
-            plot_potential(s=s, z0=x0[2])
+            plot_potential(s=s)
         print(vx)
         print(x0[2])
         print(z3d)
@@ -541,7 +640,7 @@ def single_axis(axis, bounds, res, shift):
             line3d += np.column_stack([zeros, zeros, np.ones(res) * val])
     return line3d, line
 
-def tilt_single_axis(theta, axis, bounds, res, shift):
+def tilt_single_axis(theta, axis, bounds, res, shift={'z': 0}):
     '''
     theta in radians.
     '''
