@@ -104,13 +104,15 @@ print(electrode_v)
 plot_length = 1000
 plot_fitted_curvature(s=s, electrode_voltages=electrode_v,
                     target_curvature=target_axial_curvature/2,
-                    ion_height=ion_height, length=plot_length, shift={'z': ion_height})
+                    ion_height=ion_height, length=plot_length,
+                    shift={'z': ion_height})
 
-solve_freqs(s=s, f_rad = 3e6, f_axial = 1e6, f_traprf = 30e6,
-                m = 40.*ct.atomic_mass, q = 1.*ct.elementary_charge,
-                l = 1e-6, u_dc_ref = target_axial_curvature,
-                dc_axial_set_file=Vs_axial_filename,
-                do_plot_potential=True)
+# solve_freqs(s=s, f_rad=3e6, f_split=0.2e6, f_axial=1e6, f_traprf=30e6,
+#             m=40.*ct.atomic_mass, q=1.*ct.elementary_charge,
+#             l=1e-6, u_dc_axial_ref=target_axial_curvature,
+#             dc_axial_set_file=Vs_axial_filename,
+#             dc_tilt_set_file=Vs_tilt_filename,
+#             do_plot_potential=True)
 
 print('\n\n\n')
 
@@ -144,3 +146,11 @@ print(tilt_group_v)
 # u_axial = (o_axial + 2*np.pi*(x/2))**2 * m * l**2 / q
 # take the difference between the two u_axial components along y' and z'
 # compensate using the tilt voltage
+
+solve_freqs(s=s, f_rad=3.5e6, f_split=0.5e6, f_axial=1e6, f_traprf=30e6,
+            m=40.*ct.atomic_mass, q=1.*ct.elementary_charge,
+            l=1e-6, u_dc_axial_ref=target_axial_curvature,
+            u_dc_tilt_ref=target_tilt_curvature,
+            dc_axial_set_file=Vs_axial_filename,
+            dc_tilt_set_file=Vs_tilt_filename,
+            do_plot_potential=True)

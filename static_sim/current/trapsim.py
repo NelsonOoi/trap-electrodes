@@ -440,10 +440,12 @@ def plot_fitted_curvature(s, electrode_voltages, target_curvature, ion_height,
             ax[i].legend()
         plt.show()
 
-def solve_freqs(s, f_rad = 3e6, f_axial = 1e6, f_traprf = 30e6,
-                m = 40*ct.atomic_mass, q = 1*ct.elementary_charge,
-                l = 1e-6, u_dc_ref = [0, 4e-6, 0, -2e-6, 0, -2e-6],
+def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
+                m=40*ct.atomic_mass, q=1*ct.elementary_charge,
+                l=1e-6, u_dc_axial_ref=[0., 4e-6, 0., -2e-6, 0., -2e-6],
+                u_dc_tilt_ref=[0., 0., 0., -2e-6, 0., 2e-6],
                 dc_axial_set_file="Vs_2024-02-18_axial.csv",
+                dc_tilt_set_file="Vs_2024-02-18_tilt.csv",
                 do_plot_potential=True):
 
     '''
@@ -451,6 +453,7 @@ def solve_freqs(s, f_rad = 3e6, f_axial = 1e6, f_traprf = 30e6,
     '''
 
     dc_axial_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/' + dc_axial_set_file
+    dc_tilt_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/' + dc_tilt_set_file
 
     # 3 MHz radial frequency default target
     o_rad = 2 * np.pi * f_rad
@@ -475,7 +478,7 @@ def solve_freqs(s, f_rad = 3e6, f_axial = 1e6, f_traprf = 30e6,
 
     # dc curvature scales linearly with voltage.
     u_dc = [0, u_axial, 0, -radial_anticonfinement, 0, -radial_anticonfinement]
-    dc_div = np.array(u_dc)/np.array(u_dc_ref)
+    dc_div = np.array(u_dc)/np.array(u_dc_axial_ref)
     vdc_scaling = np.max(dc_div[np.isfinite(dc_div)])
     print("DC Voltage needs scaling up by:", vdc_scaling)
 
@@ -542,17 +545,33 @@ def solve_freqs(s, f_rad = 3e6, f_axial = 1e6, f_traprf = 30e6,
     print("PP saddle point found at:", x0, "µm")
 
     curves, modes_pp = s.modes(x0)
-    f_rad = np.sqrt(q*curves/m)/(2*np.pi*l)
+    achievable_f_rad = np.sqrt(q*curves/m)/(2*np.pi*l)
 
     print(f"Scaled V_peak = {vp}V.")
     print("Curvature:", curves)
-    print("Scaled radial frequencies:", f_rad)
+    print("Scaled radial frequencies:", achievable_f_rad)
 
     print("\n")
 
-    with s.with_voltages(dc_axial_set):
+    # scale up by required dc scaling
+    v_tilt_scaling = solve_tilt_scaling(f_rad=f_rad,
+                        f_split=f_split, m=m, q=q, l=l,
+                        u_dc_tilt_ref=u_dc_tilt_ref)
+    ### read tilt basis voltage set
+    dc_tilt_df = pd.read_csv(dc_tilt_set_file)
+    dc_tilt_set = dc_tilt_df["V"]
+    print("Basis tilt DC voltage set:\n", dc_tilt_set.T)
+    dc_tilt_set *= v_tilt_scaling
+    print("Scaled tilt DC voltage set:\n", dc_tilt_set.T)
+    dc_tilt_set = np.array(dc_tilt_set)
+
+    dc_electrode_set = dc_axial_set + dc_tilt_set
+    print('overall electrode set:', dc_electrode_set)
+
+    # with s.with_voltages(dc_axial_set):
+    with s.with_voltages(dc_electrode_set):
         tmp_len = 20
-        res = 10000
+        res = 10001
         shift = {'z': x0[2]}
         x3d, x = single_axis('x', (-tmp_len/2,tmp_len/2), res, shift=shift)
         y3d, y = single_axis('y', (-tmp_len/2,tmp_len/2), res, shift=shift)
@@ -585,7 +604,19 @@ def solve_freqs(s, f_rad = 3e6, f_axial = 1e6, f_traprf = 30e6,
         print(vx)
         print(x0[2])
         print(z3d)
-        
+
+def solve_tilt_scaling(f_rad=30e6, f_split=0.2e6,
+                m=40*ct.atomic_mass, q=1*ct.elementary_charge,
+                l=1e-6, u_dc_tilt_ref=[0., 0., 0., -2e-6, 0., 2e-6]):
+    o_rad_minor = 2*np.pi*(f_rad + f_split/2) # minor axis of elliptic potential -> higher curvature
+    o_rad_major = 2*np.pi*(f_rad - f_split/2) # major axis of elliptic potential
+    u_rad_minor = o_rad_minor**2 * m * l**2 / q
+    u_rad_major = o_rad_major**2 * m * l**2 / q
+    u_diff = u_rad_minor - u_rad_major
+    v_tilt_scaling = (u_diff / 2) / u_dc_tilt_ref[-1]
+    return v_tilt_scaling
+
+
 def plot_potential(s):
     '''
     Plots the potential distribution in the xy and yx planes.
@@ -615,6 +646,7 @@ def plot_potential(s):
         ax[i].set_ylabel(labels[i][1])
         fig.colorbar(bgc)
     plt.gca().set_aspect('equal')
+    plt.show()
 
 # axis producers.
 
