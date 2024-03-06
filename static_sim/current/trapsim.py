@@ -1,5 +1,5 @@
-##########################################################################
-#           Functions fpr electrode simulation & analysis                #
+#########################################################################
+#           Functions for electrode simulation & analysis                #
 ##########################################################################
 import matplotlib.pyplot as plt, numpy as np, scipy.constants as ct
 from matplotlib.patches import Polygon
@@ -21,13 +21,17 @@ import shapely as sh
 import time
 import os
 
+def append_filepath(filename):
+    filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
+    return filename
+
 '''
 Loads trap from GDS.
 
 Returns:
 System of electrodes - derived from Electrode package
 '''
-def load_trap(filename='./single_chip.gds', electrode_layer=37,
+def load_trap(filename='single_chip.gds', electrode_layer=37,
               ito_layer=None, datatype=0, plot=True,
               xlim=(1000,10000), ylim=(2420,8000),
               electrode_mapping={}, electrode_ordering=[], trap_center=[0, 0], buildup=True):
@@ -371,7 +375,6 @@ def load_coeffs(filename):
     filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
     df = pd.read_csv(filename, usecols=['c_x0', 'c_x1', 'c_x2', 'c_y0', 'c_y1', 'c_y2', 'c_z0', 'c_z1', 'c_z2'])
     print(df)
-    # df_new = df[['cx_1', 'cx_2', 'cy_1', 'cy_2', 'cz_1', 'cz_2']]
     return df.to_numpy()
 
 def solve_voltages(el_names, fitted_coeffs, target_curvature, groups, filename):
@@ -438,7 +441,7 @@ def plot_fitted_curvature(s, electrode_voltages, target_curvature, ion_height,
             ax[i].set_xlabel('µm')
             ax[i].set_ylabel('V')
             ax[i].legend()
-        plt.show()
+        # plt.show()
 
 def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
                 m=40*ct.atomic_mass, q=1*ct.elementary_charge,
@@ -454,6 +457,7 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
 
     dc_axial_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/' + dc_axial_set_file
     dc_tilt_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/' + dc_tilt_set_file
+    overall_dc_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/'
 
     # 3 MHz radial frequency default target
     o_rad = 2 * np.pi * f_rad
@@ -566,7 +570,7 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
     dc_tilt_set = np.array(dc_tilt_set)
 
     dc_electrode_set = dc_axial_set + dc_tilt_set
-    print('overall electrode set:', dc_electrode_set)
+    print('Overall electrode set:', dc_electrode_set)
 
     # with s.with_voltages(dc_axial_set):
     with s.with_voltages(dc_electrode_set):
@@ -587,6 +591,11 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
         ax[0].plot(x, vx, label='Electrode contribution')
         ax[1].plot(y, vy, label='Electrode contribution')
         ax[2].plot(z, vz, label='Electrode contribution')
+        axes_names = ['x', 'y', 'z']
+        for i in range(len(ax)):
+            ax[i].set_title(f'{axes_names[i]}-axis potential')
+            ax[i].set_ylabel('V')
+            ax[i].set_xlabel('µm')
 
         # uncomment for static & mathieu analysis
         rf_scale = s.rf_scale(m, q, l, o_traprf)
@@ -600,10 +609,13 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
             print(line)
         '''
         if(do_plot_potential):
-            plot_potential(s=s)
-        print(vx)
-        print(x0[2])
-        print(z3d)
+            plot_potential(s=s, freqs=freqs, modes=modes)
+            plot_field(s=s)
+            plt.show()
+
+    overall_dc_df = pd.DataFrame(dc_electrode_set)
+    overall_dc_set_file += f'RF{round(f_traprf/1e6, 0)}MHz-trapx{round(freqs[0]/1e6, 0)}MHz-y_prime{round(freqs[1]/1e6, 0)}MHz-z_prime{round(freqs[2]/1e6, 0)}MHz-{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv'
+    overall_dc_df.to_csv(overall_dc_set_file)
 
 def solve_tilt_scaling(f_rad=30e6, f_split=0.2e6,
                 m=40*ct.atomic_mass, q=1*ct.elementary_charge,
@@ -617,36 +629,132 @@ def solve_tilt_scaling(f_rad=30e6, f_split=0.2e6,
     return v_tilt_scaling
 
 
-def plot_potential(s):
+def plot_potential(s, d_r=10, contour_res=1000, freqs=[], modes=[]):
     '''
     Plots the potential distribution in the xy and yx planes.
     Produces contour plots from which the curvature can be intuited.
     '''
-    z_h = s.minimum([0, 0, 50.])[2]
+    ion_height = s.minimum([0, 0, 50.])[2]
     # make grid for potential view in z = z0 plane - top view looking down
-    grid_xy, tsx0, tsy0 = make_xy_grid_flat([-40.,40.], [-40., 40.], z_h, [101, 101])
+    grid_xy, tsx0, tsy0 = make_xy_grid_flat([-40.,40.], [-40., 40.], ion_height, [101, 101])
     # make grid for potential view in x = 0 plane - side view
-    d_r = 5.
-    grid_yz, tsy1, tsz1 = make_yz_grid_flat(0., [-d_r,d_r], [np.round(z_h)-d_r, np.round(z_h)+d_r], [101, 101])
+    grid_yz, tsy1, tsz1 = make_yz_grid_flat(0., [-d_r,d_r], [np.round(ion_height)-d_r, np.round(ion_height)+d_r], [101, 101])
     grids = [[grid_xy, tsx0, tsy0], [grid_yz, tsy1, tsz1]]
     
     fig, ax = plt.subplots(1, 2, figsize=(20,7))
-    contour_res = 1000
 
-    titles = [f'Potential in xy-plane at z={z_h}', f'Potential in yz-plane at x={0}']
+    titles = [f'Potential in xy-plane at z={ion_height}', f'Potential in yz-plane at x={0}']
     labels = [['x-axis(µm)', 'y-axis(µm)'], ['y-axis(µm)', 'z-axis(µm)']]
     for i in range(2):
-        gridpot = s.potential(grids[i][0])
+        gridpot = s.potential(grids[i][0], derivative=0)
         gridpot = np.reshape(gridpot, (len(grids[i][2]), len(grids[i][1])))
         bgc = ax[i].contourf(grids[i][1], grids[i][2], gridpot, levels=contour_res, cmap=cm.plasma)
-        cp = ax[i].contour(grids[i][1], grids[i][2], gridpot, colors='white')
+        cp = ax[i].contour(grids[i][1], grids[i][2], gridpot, levels=10, colors='white')
         ax[i].clabel(cp, fontsize=10, colors='white')
         ax[i].set_title(titles[i])
         ax[i].set_xlabel(labels[i][0])
         ax[i].set_ylabel(labels[i][1])
         fig.colorbar(bgc)
+    scaling = 10
+    axial = modes[0] * scaling
+    radial_1 = modes[1] * scaling
+    radial_2 = modes[2] * scaling
+    
+    arrow_style = {
+        "head_width": 1,
+        "head_length": 2,
+    }
+    color = 'orange'
+    ax[0].arrow(0., 0., dx=axial[0], dy=axial[1], color=color, **arrow_style)
+    # ax[0].arrow(0., 0., dx=radial_1[0], dy=radial_1[1], color=color, **arrow_style)
+    ax[0].annotate(f'{round(freqs[0]/1e6, 3)} MHz', xy=[axial[0]/2, axial[1]/2], xytext=(10, -10), color=color, textcoords='offset points')
+    # ax[0].annotate(f"tilted-z': {round(freqs[1]/1e6, 3)} MHz", xy=[radial_1[0]/2, radial_1[1]/2], xytext=(10, 5), color=color, textcoords='offset points')
+    
+    yz_scaling = freqs[1] / (freqs[1] + freqs[2])
+    yz_arrow_style = {
+        "head_width": 0.5,
+        "head_length": 1,
+    }
+    ax[1].arrow(0., ion_height, dx=radial_1[1]*yz_scaling, dy=radial_1[2]*yz_scaling, color=color, **yz_arrow_style)
+    ax[1].arrow(0., ion_height, dx=radial_2[1]*(1-yz_scaling), dy=radial_2[2]*(1-yz_scaling), color=color, **yz_arrow_style)
+    ax[1].annotate(f'{round(freqs[1]/1e6, 3)} MHz', xy=[radial_1[1]/2, radial_1[2]/2 + ion_height], xytext=(4, 0), color=color, textcoords='offset points')
+    ax[1].annotate(f'{round(freqs[2]/1e6, 3)} MHz', xy=[radial_2[1]/2, radial_2[2]/2 + ion_height], xytext=(4, 0), color=color, textcoords='offset points')
     plt.gca().set_aspect('equal')
-    plt.show()
+    # plt.show()
+
+def plot_field(s, grid=0, x_grid_bounds=(-100., 100.),
+                        y_grid_bounds=(-100., 100.),
+                        z_grid_bounds=(10., 100.),
+                        grid_res=(101, 101, 101),
+                        is_dc_potential=False):
+
+    grid_xz, X, Z = make_xz_grid_flat(x_grid_bounds=x_grid_bounds,
+                                    # y_grid_bounds=(0., 0.),
+                                    y = 0,
+                                    z_grid_bounds=z_grid_bounds, grid_res=grid_res)
+
+    grid_xz = np.array(grid_xz)
+
+    grid_yz, Y, Z = make_yz_grid_flat(x = 0,
+                                    y_grid_bounds=y_grid_bounds,
+                                    z_grid_bounds=z_grid_bounds, grid_res=grid_res)
+
+    grid_yz = np.array(grid_yz)
+
+    grids = [grid_xz, grid_yz]
+    '''
+    Give labels as [x-axis, y-axis, title].
+    '''
+    labels = [['x (µm)', 'z (µm)', 'Electric field in xz-plane. y=0.'], ['y (µm)', 'z (µm)', 'Electric field in yz-plane. x=0.']]
+    
+    # for i in grid[:, 0]:
+    #     print (i)
+
+    # def make_xz_grid(x_grid_bounds, z_grid_bounds, grid_res):
+    # ts_x = np.linspace(x_grid_bounds[0], x_grid_bounds[1], grid_res[0])
+    # ts_z = np.linspace(z_grid_bounds[0], z_grid_bounds[1], grid_res[1])
+    # grid = np.array([[(x,0,z) for x in ts_x] for z in ts_z])
+    # print(grid[:, :, 2])
+
+    # return grid, ts_x, ts_z
+    # E = -dV/dr
+    field = 0
+    # if (is_dc_potential):
+    #     field = - np.array(s.electrical_potential(grid, typ='dc', derivative=1))
+    # else:
+    #     field = - np.array(s.potential(grid, derivative=1))
+    # grid = np.reshape(grid, (grid_res[0], grid_res[1], 3))
+    # field = np.reshape(field, (grid_res[0], grid_res[1], 3))
+
+    # fig, ax1 = plt.subplots(1, 1, figsize=(20, 20*np.sum(np.abs(z_grid_bounds)) / np.sum(np.abs(x_grid_bounds))))
+    fig, ax = plt.subplots(1, 2, figsize=(13, 5))
+    ax = ax.flatten()
+    for i in range(2):
+        grid = grids[i]
+        label = labels[i]
+        if (is_dc_potential):
+            field = - np.array(s.electrical_potential(grid, typ='dc', derivative=1))
+        else:
+            field = - np.array(s.potential(grid, derivative=1))
+
+        # print(grid)
+        grid = np.reshape(grid, (grid_res[1], grid_res[0], 3))
+        # print(field, field.shape)
+        # print(np.linalg.norm(field, axis=1))
+        field = np.reshape(field, (grid_res[1], grid_res[0], 3))
+        # print()
+        # print(np.linalg.norm(field, axis=2))
+        # print(field[:,:,0][0],field[:,:,1][0],field[:,:,2][0], field.shape)
+        strm = ax[i].streamplot(grid[:, :, i], grid[:, :, 2], field[:, :, i], field[:, :, 2], density=0.5,
+        # ax1.streamplot(grid[:, 0], grid[:,2], field[:,0], field[:,2], density=2,
+        # ax1.streamplot(X, Z, field[:,0], field[:,2], density=2)
+            color=np.linalg.norm(field, axis=2)*1e6, linewidth=1, cmap=cm.plasma, broken_streamlines=False)
+        ax[i].set_xlabel(label[0])
+        ax[i].set_ylabel(label[1])
+        ax[i].set_title(label[2])
+        cbar = fig.colorbar(strm.lines)
+        cbar.set_label('V / m')
+    # plt.plot()
 
 # axis producers.
 
@@ -714,6 +822,15 @@ def make_yz_grid_flat(x, y_grid_bounds, z_grid_bounds, grid_res):
         for y in ts_y:
             grid.append([x, y, z])
     return grid, ts_y, ts_z
+
+def make_xz_grid_flat(x_grid_bounds, y, z_grid_bounds, grid_res):
+    ts_x = np.linspace(x_grid_bounds[0], x_grid_bounds[1], grid_res[0])
+    ts_z = np.linspace(z_grid_bounds[0], z_grid_bounds[1], grid_res[1])
+    grid = []
+    for z in ts_z:
+        for x in ts_x:
+            grid.append([x, y, z])
+    return grid, ts_x, ts_z
 
 def make_xyz_grid_flat(x_grid_bounds, y_grid_bounds, z_grid_bounds, grid_res):
     ts_x = np.linspace(x_grid_bounds[0], x_grid_bounds[1], grid_res[0])

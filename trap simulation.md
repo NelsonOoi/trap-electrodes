@@ -1,13 +1,13 @@
 Electrode simulation goals
-- trap chip gds parser
-	- maps electrode names to polygons
-- finds curvatures directly from individual electrode potentials
-- solves for basis voltage sets
+- [x] trap chip gds parser
+	- [x] maps electrode names to polygons
+- [x] finds curvatures directly from individual electrode potentials
+- [x] solves for basis voltage sets
 	- axial
 	- x,y-comp
 	- tilt at user specified angle
-- target frequencies
-- radial mode breaking degeneracy
+- [x] target frequencies
+- [x] radial mode breaking degeneracy
 - transport waveforms
 - export
 	- coefficient fits

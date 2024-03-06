@@ -33,9 +33,15 @@ electrode_mapping = {
 center_electrodes = ['6', '16']
 trap_center = [(4920+5040)/2, (5502.5 + 5297.5)/2]
 
-electrode_ordering = [str(i) for i in range(2, 21)]
-electrode_ordering.remove('11')
-list2 = ['1', '11', 'r', 'gnd']
+alternate_ordering = False
+electrode_ordering = [str(i) for i in range(1, 21)]
+list2 = ['r', 'gnd']
+
+if (alternate_ordering):
+    electrode_ordering = [str(i) for i in range(2, 21)]
+    electrode_ordering.remove('11')
+    list2 = ['1', '11', 'r', 'gnd']
+
 electrode_ordering = electrode_ordering + list2
 print(electrode_ordering)
 
@@ -95,13 +101,13 @@ groups = [['1', '11'], ['4', '14', '8', '18'], ['6', '16'], ['3', '13', '9', '19
 # groups = [['1', '11'], ['4', '8'], ['14', '18'], ['5', '6', '7', '15', '16', '17'], ['3', '13'], ['9', '19']]
 # groups = [['1'],  ['11'], ['4', '8'], ['14', '18'], ['5', '6', '7'], ['15', '16', '17']] # gives unphysical 10^11 results.
 
-Vs_axial_filename = 'Vs_axial_7.csv'
+Vs_axial_filename = 'Vs_axial_5.csv'
 electrode_v, group_v = solve_voltages(el_names=s.names,
                     fitted_coeffs=fc, target_curvature=target_axial_curvature,
                     groups=groups, filename=Vs_axial_filename)
 print(electrode_v)
 
-plot_length = 1000
+plot_length = 100
 plot_fitted_curvature(s=s, electrode_voltages=electrode_v,
                     target_curvature=target_axial_curvature/2,
                     ion_height=ion_height, length=plot_length,
@@ -115,8 +121,6 @@ plot_fitted_curvature(s=s, electrode_voltages=electrode_v,
 #             do_plot_potential=True)
 
 print('\n\n\n')
-
-print('Tilt mode solutions')
 
 
 '''
@@ -147,7 +151,7 @@ print(tilt_group_v)
 # take the difference between the two u_axial components along y' and z'
 # compensate using the tilt voltage
 
-solve_freqs(s=s, f_rad=3.5e6, f_split=0.5e6, f_axial=1e6, f_traprf=30e6,
+solve_freqs(s=s, f_rad=3.5e6, f_split=1e6, f_axial=1e6, f_traprf=30e6,
             m=40.*ct.atomic_mass, q=1.*ct.elementary_charge,
             l=1e-6, u_dc_axial_ref=target_axial_curvature,
             u_dc_tilt_ref=target_tilt_curvature,
