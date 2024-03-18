@@ -70,23 +70,38 @@ s['r'].rf = u*np.sqrt(q/m)/(2*l*o)
 x0 = s.minimum((0, 0, 1.), axis=(1, 2))
 ion_height = x0[2]
 
-# files = ['Vs_axial_karan.csv', 'Vs_axial125_karan_recentered.csv', 'Vs_tilt_karan.csv', 'Vs_xcomp.csv', 'Vs_ycomp.csv', 'Vs_zcomp.csv']
-files = ['Vs_test.csv']
+files = ['Vs_axial_karan.csv', 'Vs_axial125_karan_recentered.csv', 'Vs_tilt_karan.csv', 'Vs_xcomp.csv', 'Vs_ycomp.csv', 'Vs_zcomp.csv']
+# files = ['Vs_test.csv']
+# files=['Vs_axial125_karan_recentered.csv']
+files=['Vs_axial_5.csv']
 for filename in files:
     filename = append_filepath(filename=filename)
-    el_v = pd.read_csv(filename, header=None).to_numpy().flatten()
-    el_v = np.append(el_v, np.array([0, 0]))
+    el_v = pd.read_csv(filename)
     print(el_v)
-    with s.with_voltages(el_v):
+    if ('V' in el_v.columns):
+        el_v = np.float64(el_v['V'])
+    else:
+        el_v = el_v.to_numpy().flatten()
+        el_v = np.append(el_v, np.array([0, 0]))
+    
+    with s.with_voltages(dcs=el_v):
+        # s['r'].rf = u*np.sqrt(q/m)/(2*l*o)
+        # x0 = s.minimum((0, 0, 1.), axis=(1, 2))
+        # ion_height = x0[2]
+        x0 = s.minimum((0, 0, 50.), axis=(1, 2))
+        ion_height = x0[2]
+        print('ion height:', ion_height)
         plot_field(s=s,
-                    x_grid_bounds=(-30., 30.),
+                    x_grid_bounds=(-10., 10.),
                     y_grid_bounds=(-10., 10.),
-                    z_grid_bounds=(30., 70.),
+                    z_grid_bounds=(40., 60.),
                 #    x_grid_bounds=(-300., 300.),
                 #     y_grid_bounds=(5., 500.),
                 #     z_grid_bounds=(0.1, 50),
-                    grid_res=(101, 101, 101),
-                    is_dc_potential=True)
-
+                    # grid_res=(101, 101, 101),
+                    grid_res=(201, 201, 201),
+                    is_dc_potential=True,
+                    do_potential_plot=False)
+        
 plt.show()
 

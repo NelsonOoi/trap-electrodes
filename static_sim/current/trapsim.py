@@ -420,7 +420,7 @@ def plot_fitted_curvature(s, electrode_voltages, target_curvature, ion_height,
     y3d, y = single_axis('y', bounds=(-length/2,length/2), res=res, shift=shift)
     z3d, z = single_axis('z', bounds=(-length/2,length/2), res=res, shift=shift)
 
-    with s.with_voltages(electrode_voltages):
+    with s.with_voltages(dcs=electrode_voltages):
         vx = s.electrical_potential(x3d).T
         vy = s.electrical_potential(y3d).T
         vz = s.electrical_potential(z3d).T
@@ -572,8 +572,8 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
     dc_electrode_set = dc_axial_set + dc_tilt_set
     print('Overall electrode set:', dc_electrode_set)
 
-    # with s.with_voltages(dc_axial_set):
-    with s.with_voltages(dc_electrode_set):
+    # with s.with_voltages(dcs=dc_axial_set):
+    with s.with_voltages(dcs=dc_electrode_set):
         tmp_len = 20
         res = 10001
         shift = {'z': x0[2]}
@@ -686,7 +686,8 @@ def plot_field(s, grid=0, x_grid_bounds=(-100., 100.),
                         y_grid_bounds=(-100., 100.),
                         z_grid_bounds=(10., 100.),
                         grid_res=(101, 101, 101),
-                        is_dc_potential=False):
+                        is_dc_potential=False,
+                        do_potential_plot=False):
 
     grid_xz, X, Z = make_xz_grid_flat(x_grid_bounds=x_grid_bounds,
                                     # y_grid_bounds=(0., 0.),
@@ -727,22 +728,32 @@ def plot_field(s, grid=0, x_grid_bounds=(-100., 100.),
     # field = np.reshape(field, (grid_res[0], grid_res[1], 3))
 
     # fig, ax1 = plt.subplots(1, 1, figsize=(20, 20*np.sum(np.abs(z_grid_bounds)) / np.sum(np.abs(x_grid_bounds))))
-    fig, ax = plt.subplots(1, 2, figsize=(13, 5))
+    fig, ax = [0, 0]
+    if (do_potential_plot):
+        fig, ax = plt.subplots(1, 3, figsize=(13, 5))
+    else:
+        fig, ax = plt.subplots(1, 2, figsize=(13, 5))
     ax = ax.flatten()
     for i in range(2):
         grid = grids[i]
         label = labels[i]
         if (is_dc_potential):
             field = - np.array(s.electrical_potential(grid, typ='dc', derivative=1))
+            potential = np.array(s.electrical_potential(grid, typ='dc', derivative=0))
         else:
             field = - np.array(s.potential(grid, derivative=1))
+            potential = np.array(s.potential(grid, derivative=0))
 
         # print(grid)
         grid = np.reshape(grid, (grid_res[1], grid_res[0], 3))
         # print(field, field.shape)
         # print(np.linalg.norm(field, axis=1))
         field = np.reshape(field, (grid_res[1], grid_res[0], 3))
-        # print()
+        potential = np.reshape(potential, (grid_res[1], grid_res[0]))
+        # print(grid, grid.shape)
+        # print(field, field.shape)
+        # print(grid[:, :, 0])
+        # print(field[:, :, 0])
         # print(np.linalg.norm(field, axis=2))
         # print(field[:,:,0][0],field[:,:,1][0],field[:,:,2][0], field.shape)
         strm = ax[i].streamplot(grid[:, :, i], grid[:, :, 2], field[:, :, i], field[:, :, 2], density=0.5,
@@ -754,6 +765,10 @@ def plot_field(s, grid=0, x_grid_bounds=(-100., 100.),
         ax[i].set_title(label[2])
         cbar = fig.colorbar(strm.lines)
         cbar.set_label('V / m')
+        if(i == 0 and do_potential_plot):
+            contr_plot = ax[2].contourf(potential)
+            contr_cbar = fig.colorbar(contr_plot)
+
     # plt.plot()
 
 # axis producers.
