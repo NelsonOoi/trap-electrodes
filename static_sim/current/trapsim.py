@@ -9,11 +9,11 @@ from electrode import (System, PolygonPixelElectrode, euler_matrix,
     PatternRangeConstraint, shaped, utils)
 from scipy.signal import argrelextrema
 from scipy.optimize import minimize
+from scipy.optimize import linprog
 import math
 import json
 import pandas as pd
 from datetime import datetime
-from scipy.optimize import linprog
 import gdspy
 import shapely.geometry as sg
 import shapely.ops as so
