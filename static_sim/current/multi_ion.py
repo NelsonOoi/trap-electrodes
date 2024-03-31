@@ -28,8 +28,9 @@ position_ansatz = position_ansatz - recentering / 2
 
 global cascaded_position_ansatz
 cascaded_position_ansatz = position_ansatz
-ab_ansatz = [1e6, 1e16]
-ab_bounds = ((1e4, 1e20), (1e2, 1e24))
+# ab_ansatz = [1e6, 1e14] #best for 9 ion so far
+ab_ansatz = [1e6, 1e2]
+ab_bounds = ((1e4, 1e20), (1e2, 1e20))
 # ab_ansatz = [1e-12, 1e-32]
 # ab_bounds = ((0, 1e-8), (0, 1e-8))
 # ab_ansatz = [1e-6, 1e-8]
@@ -56,8 +57,9 @@ def eq_positions(ab, cascaded_position_ansatz=cascaded_position_ansatz):
         n_ions = len(ions_pos)
         k = 1 / (4 * np.pi * ct.epsilon_0 * e0_scaling) * 1/2
         u = 0
+        b_scaling = 1e12 # used to make a and b on the same order of magnitude
         for i in range(n_ions):
-            u += ions_charges[i] * (ab[0] * (ions_pos[i]) **2 + ab[1] * (ions_pos[i]) **4) * energy_scaling
+            u += ions_charges[i] * (ab[0] * (ions_pos[i]) **2 + ab[1] * b_scaling * (ions_pos[i]) **4) * energy_scaling
             interaction_potential = 0
             other_ions = list(range(n_ions))
             other_ions.remove(i)
@@ -77,17 +79,17 @@ def eq_positions(ab, cascaded_position_ansatz=cascaded_position_ansatz):
     #                     #  'fatol': 1e-10,
     #                     #  'xatol': 1e-10,
     #                     #  'xrtol': 0.001,
-    #                     #  'norm': 2,
-    #                     'eps': 0.0001, #bfgs
+    #                     #  'norm': 0.2,
+    #                     # 'eps': 0.001, #bfgs
     #                     # 'gtol': 1e-7, #l-bfgs-b
     #                     'adaptive': True,
     #                      }
-    # # inner_opt_method = 'Nelder-Mead'
+    # # # inner_opt_method = 'Nelder-Mead'
     # inner_opt_method = 'BFGS'
-    # # inner_opt_method = 'L-BFGS-B'
-    # # inner_opt_method = 'CG'
-    # # inner_opt_method = 'COBYLA'
-    # # inner_opt_method = 'dogleg'
+    # # # inner_opt_method = 'L-BFGS-B'
+    # # # inner_opt_method = 'CG'
+    # # # inner_opt_method = 'COBYLA'
+    # # # inner_opt_method = 'dogleg'
     # res_potential = opt.minimize(fun=scaled_potential,
     #                              x0=cascaded_position_ansatz,
     #                             method=inner_opt_method,
@@ -100,7 +102,8 @@ def eq_positions(ab, cascaded_position_ansatz=cascaded_position_ansatz):
                                  x0=cascaded_position_ansatz,
                                  niter=int(10),
                                  minimizer_kwargs=minimizer_kwargs,
-                                #  disp=True,
+                                 disp=True,
+                                 interval=1
                                 #  method=inner_opt_method,
                                 #  options=inner_opt_options,
                             #  bounds=pos_bounds
@@ -144,12 +147,12 @@ outer_opt_options = {
 outer_opt_method = 'Nelder-Mead'
 # outer_opt_method = 'L-BFGS-B'
 # outer_opt_method = 'BFGS'
-res = opt.minimize(fun=squared_dist_deviation,
-                    x0=ab_ansatz,
-                    method=outer_opt_method,
-                    options=outer_opt_options,
-                    bounds=ab_bounds,
-               )
+# res = opt.minimize(fun=squared_dist_deviation,
+#                     x0=ab_ansatz,
+#                     method=outer_opt_method,
+#                     options=outer_opt_options,
+#                     bounds=ab_bounds,
+#                )
 # minimizer_kwargs = {'method': 'BFGS'}
 # res = opt.basinhopping(func=squared_dist_deviation,
 #                     x0=ab_ansatz,
@@ -191,15 +194,16 @@ def potential(ab, x, ions_charges, ions_pos, current_ion = 0):
     return u
 
 mu = 1e-6
-
-res_ab = res.x
+b_scaling = 1e12
+# res_ab = res.x
+res_ab = ab_ansatz
 plt.figure(figsize=(10,6))
 res_pos, res_spacings = eq_positions(res_ab)
 ions_potentials = []
 print(res_pos, res_spacings, res_ab)
 for ab in res_ab:
     print(ab)
-
+res_ab[1] *= b_scaling
 for i in range(n_ions):
     delta = target_interion_spacing * 0.75
     x_around_ion = np.linspace(res_pos[i] - delta, res_pos[i] + delta)

@@ -95,6 +95,14 @@ def load_trap(filename='single_chip.gds', electrode_layer=37,
         # print(sg.mapping(el)['coordinates'][0])
         # print(np.array(sg.mapping(el)['coordinates'][0]) - np.array([10000, 1000]))
         el = el_list_current[i]
+
+        # if points defining the electrode are clockwise,
+        # re-orient them so that they are CCW.
+        # this is required as electrode assigns a negative area
+        # to those polygons with CW vertex ordering.
+        # if (el.exterior.is_ccw == False):
+        el = sg.polygon.orient(el, sign=1.0)
+
         el_coordinates = np.array(sg.mapping(el).get('coordinates')[0]) - np.array(trap_center)
         el = sh.affinity.translate(el, xoff=-trap_center[0], yoff=-trap_center[1])
 
@@ -107,12 +115,6 @@ def load_trap(filename='single_chip.gds', electrode_layer=37,
         else:
             el_dict.get(name).append(el_coordinates)
 
-        # if(name in el_dict.keys() and el_dict.get(name) is not None):
-        #     print(el_dict.get(name))
-            # el_dict[name] = el_dict.get(name).append(el_coordinates)
-        # else:
-            # el_dict[name] = [el_coordinates]
-        
         if (plot):
             xs, ys = el.exterior.xy 
             ax.fill(xs, ys, alpha=0.5, fc='r', ec='none')
@@ -139,12 +141,42 @@ def load_trap(filename='single_chip.gds', electrode_layer=37,
     # plt.show()
     return s, electrodes, el_dict
 
-def trap(spacing,
-        gnd_width, gnd_height, gnd_start_pos,
-        dc_width, dc_height, dc_start_pos,
-        rf_width, rf_height, rf_start_pos,
-        dc_mid_width, dc_mid_height, dc_mid_start_pos,
-        n=9, r=2, real=False):
+spacing = 5.
+n = 9
+dc_width = 120.
+# dc_height = 1000.
+gnd_width = 300.
+gnd_height = 1000.
+dc_height = 1000.
+dc_mid_height = 20.
+# dc_mid_width = n * dc_width + (n-1) * spacing
+dc_mid_width = n * dc_width + (n+1) * spacing + 2 * gnd_width
+rf_height = 70.
+# rf_width = n * dc_width + (n-1) * spacing
+rf_width = n * dc_width + (n+1) * spacing + 2 * gnd_width
+
+leftmost_electrode_x = -(4.5*dc_width + 4*spacing)
+rightmost_electrode_x = (4.5*dc_width + 4*spacing)
+
+gnd_start_pos = [(leftmost_electrode_x-gnd_width-spacing, (2.5*spacing + dc_mid_height + rf_height)),
+                (leftmost_electrode_x-gnd_width-spacing, -(2.5*spacing + dc_mid_height + rf_height + dc_height)),
+                (rightmost_electrode_x+spacing, (2.5*spacing + dc_mid_height + rf_height)),
+                (rightmost_electrode_x+spacing, -(2.5*spacing + dc_mid_height + rf_height + dc_height))
+                ]
+
+dc_start_pos = [(leftmost_electrode_x, (2.5*spacing + dc_mid_height + rf_height)),
+                (leftmost_electrode_x, -(2.5*spacing + dc_mid_height + rf_height + dc_height))]
+rf_start_pos = [(leftmost_electrode_x-gnd_width-spacing, (1.5*spacing + dc_mid_height)),
+                (leftmost_electrode_x-gnd_width-spacing, -(1.5*spacing + dc_mid_height + rf_height))]
+dc_mid_start_pos = [(leftmost_electrode_x-gnd_width-spacing, (.5*spacing)),
+                (leftmost_electrode_x-gnd_width-spacing, -(.5*spacing +dc_mid_height))]
+
+def trap(spacing=5.,
+        gnd_width=300., gnd_height=1000., gnd_start_pos=gnd_start_pos,
+        dc_width=dc_width, dc_height=dc_height, dc_start_pos=dc_start_pos,
+        rf_width=rf_width, rf_height=rf_height, rf_start_pos=rf_start_pos,
+        dc_mid_width=dc_mid_width, dc_mid_height=dc_mid_height, dc_mid_start_pos=dc_mid_start_pos,
+        n=9):
     '''
     Defines an approximate Quetzal trap.
     # n electrodes per row (10 default)
@@ -191,7 +223,7 @@ def trap(spacing,
         xp = dc_mid_start_pos[i][0] - spacing/2
         yp = dc_mid_start_pos[i][1] - spacing/2
         dc_mid_id = str(10*i + 1)
-        electrodes.append(
+        electrodes.insert(10*i,
             (dc_mid_id, [[
                 (xp, yp),
                 (xp + dc_mid_w_eff, yp),
@@ -257,7 +289,7 @@ def save_trap(el_map, name='quetzal'):
     with open(str(name) + ".json", "w") as outfile: 
         json.dump(el_dict, outfile)
 
-def get_axes_potentials(s, length=20, res=10001, shift={'z': 0}, tilt_theta=0):
+def get_axes_unitv_potentials(s, length=20, res=10001, shift={'z': 0}, tilt_theta=0):
     '''
     Define axes and retrieve potentials along each axis.
 
@@ -273,7 +305,6 @@ def get_axes_potentials(s, length=20, res=10001, shift={'z': 0}, tilt_theta=0):
     x3d, x = single_axis('x', bounds=(-length/2,length/2), res=res, shift=shift)
     y3d, y = single_axis('y', bounds=(-length/2,length/2), res=res, shift=shift)
     z3d, z = single_axis('z', bounds=(-length/2,length/2), res=res, shift=shift)
-
     if(tilt_theta != 0):
         y3d, y = tilt_single_axis(tilt_theta, 'y_prime', bounds=(-length/2,length/2), res=res, shift=shift)
         z3d, z = tilt_single_axis(tilt_theta, 'z_prime', bounds=(-length/2,length/2), res=res, shift=shift)
@@ -282,6 +313,34 @@ def get_axes_potentials(s, length=20, res=10001, shift={'z': 0}, tilt_theta=0):
     p_x = s.individual_potential(x3d, 0)
     p_y = s.individual_potential(y3d, 0)
     p_z = s.individual_potential(z3d, 0)
+
+    return [x, y, z, p_x, p_y, p_z]
+
+def get_axes_potentials(s, length=20, res=10001, shift={'z': 0}, tilt_theta=0):
+    '''
+    Define axes and retrieve potentials along each axis.
+
+    Inputs:
+    - System of electrodes
+    - Length of axis
+    - Resolution along each axis
+    - Directional shift
+    - Tilt of y,z-axes
+    '''
+
+    # create fit axes
+    x3d, x = single_axis('x', bounds=(-length/2,length/2), res=res, shift=shift)
+    y3d, y = single_axis('y', bounds=(-length/2,length/2), res=res, shift=shift)
+    z3d, z = single_axis('z', bounds=(np.max([0., -length/2]),length/2), res=res, shift=shift)
+
+    if(tilt_theta != 0):
+        y3d, y = tilt_single_axis(tilt_theta, 'y_prime', bounds=(-length/2,length/2), res=res, shift=shift)
+        z3d, z = tilt_single_axis(tilt_theta, 'z_prime', bounds=(-length/2,length/2), res=res, shift=shift)
+
+    # find individual potential contributions
+    p_x = s.electrical_potential(x3d, typ='dc', derivative=0)
+    p_y = s.electrical_potential(y3d, typ='dc', derivative=0)
+    p_z = s.electrical_potential(z3d, typ='dc', derivative=0)
 
     return [x, y, z, p_x, p_y, p_z]
 
@@ -368,13 +427,13 @@ def get_electrode_curvatures(s, x, y, z, p_x, p_y, p_z, ion_height,
     savefile = np.concatenate((np.array([s.names]).T, np.array(fitted_coeffs), np.array(residuals)), axis=1)
     df = pd.DataFrame(savefile, columns=columns)
     df.to_csv(filename)
-    print(columns)
+    # print(columns)
     return [fitted_coeffs, residuals]
 
 def load_coeffs(filename):
     filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
     df = pd.read_csv(filename, usecols=['c_x0', 'c_x1', 'c_x2', 'c_y0', 'c_y1', 'c_y2', 'c_z0', 'c_z1', 'c_z2'])
-    print(df)
+    # print(df)
     return df.to_numpy()
 
 def solve_voltages(el_names, fitted_coeffs, target_curvature, groups, filename):
@@ -398,8 +457,25 @@ def solve_voltages(el_names, fitted_coeffs, target_curvature, groups, filename):
         group_coeffs = np.zeros(6)
         for electrode_name in group:
             group_coeffs += np.array(A[el_names.index(electrode_name)])
+
+        do_clean_data = False
+        if (do_clean_data):
+            micron_to_m = 1e6
+            threshold = 1e-4
+            # checking if we should remove first-order
+            f_order = [0, 2, 4]
+            for f in f_order:
+                if (np.abs(group_coeffs[f] * micron_to_m) < threshold):
+                    group_coeffs[f] = 0
+            # checking if we should remove second-order
+            s_order = [1, 3, 5]
+            for s in s_order:
+                if (np.abs(group_coeffs[s] * micron_to_m**2) < threshold):
+                    group_coeffs[s] = 0
+
         A_grouped.append(group_coeffs)
     A_grouped = np.array(A_grouped)
+    print(A_grouped)
     A_grouped[np.abs(A_grouped)<1e-17] = 0
 
     group_voltages = np.linalg.solve(A_grouped.T, target_coeffs)
@@ -770,6 +846,22 @@ def plot_field(s, grid=0, x_grid_bounds=(-100., 100.),
             contr_cbar = fig.colorbar(contr_plot)
 
     # plt.plot()
+
+def read_electrode_voltages(files=[]):
+    overall = []
+    for filename in files:
+        filename = append_filepath(filename=filename)
+        el_v = pd.read_csv(filename, header=None)
+        if ('V' in el_v.columns or 'V' in el_v.values):
+            el_v = el_v.to_numpy().flatten()
+            el_v = np.delete(el_v, np.where(el_v == 'V'))
+            el_v = np.float64(el_v)
+        else:
+            el_v = el_v.to_numpy().flatten()
+        if(len(el_v) == 20):
+            el_v = np.append(el_v, np.array([0, 0]))
+        overall.append(np.array(el_v))
+    return np.array(overall)
 
 # axis producers.
 

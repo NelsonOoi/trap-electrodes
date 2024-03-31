@@ -73,18 +73,27 @@ ion_height = x0[2]
 files = ['Vs_axial_karan.csv', 'Vs_axial125_karan_recentered.csv', 'Vs_tilt_karan.csv', 'Vs_xcomp.csv', 'Vs_ycomp.csv', 'Vs_zcomp.csv']
 # files = ['Vs_test.csv']
 # files=['Vs_axial125_karan_recentered.csv']
-files=['Vs_axial_5.csv']
-for filename in files:
-    filename = append_filepath(filename=filename)
-    el_v = pd.read_csv(filename)
-    print(el_v)
-    if ('V' in el_v.columns):
-        el_v = np.float64(el_v['V'])
-    else:
-        el_v = el_v.to_numpy().flatten()
-        el_v = np.append(el_v, np.array([0, 0]))
+# files=['mar28_Vs_axial.csv']
+# files=['Vs_axial_karan2.csv']
+overall = read_electrode_voltages(files=files)
+for i in range(len(overall)):
+    voltage_set = overall[i]
+    print(files[i])
+# for filename in files:
+#     filename = append_filepath(filename=filename)
+#     el_v = pd.read_csv(filename, header=None)
+#     if ('V' in el_v.columns or 'V' in el_v.values):
+#         el_v = el_v.to_numpy().flatten()
+#         el_v = np.delete(el_v, np.where(el_v == 'V'))
+#         el_v = np.float64(el_v)
+#     else:
+#         el_v = el_v.to_numpy().flatten()
+#     if(len(el_v) == 20):
+#         el_v = np.append(el_v, np.array([0, 0]))
+
+#     print(el_v)
     
-    with s.with_voltages(dcs=el_v):
+    with s.with_voltages(dcs=voltage_set):
         # s['r'].rf = u*np.sqrt(q/m)/(2*l*o)
         # x0 = s.minimum((0, 0, 1.), axis=(1, 2))
         # ion_height = x0[2]
@@ -100,8 +109,8 @@ for filename in files:
                 #     z_grid_bounds=(0.1, 50),
                     # grid_res=(101, 101, 101),
                     grid_res=(201, 201, 201),
-                    is_dc_potential=True,
-                    do_potential_plot=False)
+                    is_dc_potential=False,
+                    do_potential_plot=True)
         
 plt.show()
 
