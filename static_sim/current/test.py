@@ -6,42 +6,48 @@ import shapely.geometry as sg
 import shapely.ops as so
 import shapely as sh
 
-shape = [[ -560. ,   102.5],
-       [ -560. ,  1112.5],
-       [-1135. ,  1595. ],
-       [-1135. ,  1745. ],
-       [ -985. ,  1745. ],
-       [ -985. ,  1585. ],
-       [ -440. ,  1102.5],
-       [ -440. ,   102.5],
-       [ -560. ,   102.5]]
+s, electrodes, electrodes_dict = load_trap(filename='single_chip.gds',
+            electrode_layer=37,
+            ito_layer=12, electrode_mapping=default_electrode_mapping,
+            electrode_ordering=electrode_ordering, plot=True,
+            xlim=(-5000,5000), ylim=(-3000,3000), trap_center=default_trap_center, buildup=False)
 
-electrodes = [( '2',
-    [shape]
-)]
+# shape = [[ -560. ,   102.5],
+#        [ -560. ,  1112.5],
+#        [-1135. ,  1595. ],
+#        [-1135. ,  1745. ],
+#        [ -985. ,  1745. ],
+#        [ -985. ,  1585. ],
+#        [ -440. ,  1102.5],
+#        [ -440. ,   102.5],
+#        [ -560. ,   102.5]]
+
+# electrodes = [( '2',
+#     [shape]
+# )]
 
 
-s = System([PolygonPixelElectrode(name=n, paths=map(np.array, p))
-                for n, p in electrodes])
+# s = System([PolygonPixelElectrode(name=n, paths=map(np.array, p))
+#                 for n, p in electrodes])
 
-with s.with_voltages(dcs=[1.]):
-    print(s.electrical_potential([0., 0., 51.7], 'dc'))
+# with s.with_voltages(dcs=[1.]):
+#     print(s.electrical_potential([0., 0., 51.7], 'dc'))
 
-shape1 = sg.Polygon(shape)
-shape1 = sg.polygon.orient(shape1, sign=1.0)
-el_coordinates = np.array(sg.mapping(shape1).get('coordinates')[0])
+# shape1 = sg.Polygon(shape)
+# shape1 = sg.polygon.orient(shape1, sign=1.0)
+# el_coordinates = np.array(sg.mapping(shape1).get('coordinates')[0])
 
-electrodes1 = [( '2',
-    [el_coordinates]
-)]
+# electrodes1 = [( '2',
+#     [el_coordinates]
+# )]
 
-print(shape1)
+# print(shape1)
 
-s1 = System([PolygonPixelElectrode(name=n, paths=map(np.array, p))
-                for n, p in electrodes1])
+# s1 = System([PolygonPixelElectrode(name=n, paths=map(np.array, p))
+#                 for n, p in electrodes1])
 
-with s1.with_voltages(dcs=[1.]):
-    print(s1.electrical_potential([0., 0., 51.7], 'dc'))
+# with s1.with_voltages(dcs=[1.]):
+#     print(s1.electrical_potential([0., 0., 51.7], 'dc'))
 # files = ['Vs_axial_karan.csv', 'Vs_axial_karan2.csv', 'Vs_axial125_karan_recentered.csv', 'Vs_tilt_karan.csv']
 # overall = read_electrode_voltages(files=files)
 

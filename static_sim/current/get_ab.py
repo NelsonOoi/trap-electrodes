@@ -1,4 +1,5 @@
 from trapsim import *
+import matplotlib as mpl
 
 ''' Plot trap using GDS '''
 electrode_mapping = {
@@ -103,31 +104,67 @@ print('x0', x0, 'ion height', ion_height)
 print(s.names)
 
 # '''Extract alphas and betas from voltage sets.'''
-files = ['Vs_axial_karan.csv', 'Vs_axial125_karan_recentered.csv', 'Vs_tilt_karan.csv', 'Vs_xcomp.csv', 'Vs_ycomp.csv', 'Vs_zcomp.csv']
+# files = ['Vs_axial_karan.csv', 'Vs_axial125_karan_recentered.csv', 'Vs_tilt_karan.csv', 'Vs_xcomp.csv', 'Vs_ycomp.csv', 'Vs_zcomp.csv']
+# names = ['Vs_axial.', 'Vs_axial125 recentered at electrode 6.', 'Vs_tilt.', 'Vs_xcomp.', 'Vs_ycomp.', 'Vs_zcomp.']
 # files=['Vs_axial_karan2.csv']
-overall = read_electrode_voltages(files=files)
+files=['apr5_gds_Vs_axial.csv']
+names=['adskhaksdjha']
 
+overall = read_electrode_voltages(files=files)
+print(overall)
 for i in range(len(overall)):
     voltage_set = overall[i]
     print(files[i])
     fit_order = 2
     print(voltage_set)
     with s.with_voltages(dcs=voltage_set):
+
+        '''Temporary testing code'''
+        fig1, ax1 = plt.subplots(1, 2, figsize=(15,5))
+        s.plot(ax1[0])
+        s.plot_voltages(ax1[1])
+        r= 2000
+        for axi in ax1.flat:
+            axi.set_aspect("equal")
+            axi.set_xlim(-r, r)
+            axi.set_ylim(-r, r)
+        
+        u = s.dcs
+        um = np.fabs(u).max() or 1.
+        u = (u / um + 1)/2
+        cmap = plt.cm.RdBu_r
+        print('min u:', np.min(u), 'max u:', np.max(u), 'u', u)
+        # norm = mpl.colors.Normalize(vmin=np.min(u), vmax=np.max(u))
+        norm = mpl.colors.Normalize(vmin=0, vmax=1)
+        # colors = [cmap(ui) for ui in u]
+        # print(colors)
+        # bar_range = np.round(np.arange(-um, um, 2*um/10), 3)
+        # code to make the colorbar
+        bar_range = np.round(np.linspace(-um, um, 11), 3)
+        colorb = fig1.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+             ax=ax1, orientation='vertical', label='Applied voltages (V)')
+        colorb.ax.yaxis.set_major_locator(plt.MaxNLocator(len(bar_range)))
+        colorb.ax.set_yticklabels(bar_range)
+        # fig1.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+        #      ax=ax1, orientation='vertical', label='Applied voltages (V)').ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(base=0.1))
+        '''temp test code end'''
+
         r1 = s.electrical_potential(x0, typ="dc", derivative=1, expand=True)
         r2 = s.electrical_potential(x0, typ="dc", derivative=2, expand=True)
-        print(r1, r2)
-        r = get_axes_potentials(s=s, length=6000., shift={'z': ion_height})
-        fig, ax = plt.subplots(1, 3, figsize=(15,5))
+        print('e-field:', r1)
+        print('curvatures:', r2)
+        r = get_axes_potentials(s=s, length=3000., shift={'z': ion_height})
+        fig, ax = plt.subplots(1, 3, figsize=(10,5))
         ax = ax.flatten()
         axisname = 'xyz'
         for j in range(3):
             axes = r[j]
             pots = r[j+3].flatten()
             print(len(axes), len(pots))
-            # c_arr, A, residual = solve_axes_coeffs(axes, pots, order=fit_order)
-            # print(axisname[j], c_arr)
-            # mu = 1e-6
+            
             ax[j].plot(axes, pots)
-            ax[j].set_ylabel('V / V')
             ax[j].set_xlabel(f'{axisname[j]} (µm)')
+        ax[0].set_ylabel('Potential (V)')
+        fig.suptitle(f'{names[i]}')
+        print('voltage set', s.electrical_potential([0., 100., 1.], derivative=0))
 plt.show()
