@@ -13,7 +13,7 @@ from scipy.optimize import linprog
 import math
 import json
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 import gdspy
 import shapely.geometry as sg
 import shapely.ops as so
@@ -60,9 +60,18 @@ center_electrodes = ['6', '16']
 default_trap_center = [(4920+5040)/2, (5502.5 + 5297.5)/2]
 micron_to_m = 1e6
 
-alternate_ordering = False
+
 electrode_ordering = [str(i) for i in range(1, 21)]
 list2 = ['r', 'gnd']
+
+alternate_ordering = False
+
+if (alternate_ordering):
+    electrode_ordering = [str(i) for i in range(2, 21)]
+    electrode_ordering.remove('11')
+    list2 = ['1', '11', 'r', 'gnd']
+
+electrode_ordering = electrode_ordering + list2
 
 '''
 Loads trap from GDS.
@@ -356,13 +365,17 @@ def get_electrode_coeffs(s, ion_pos,
     # solve for d_zz using laplace.
 
     d2 = s.individual_potential(ion_pos, 2)
-    d_xx, d_yy = d2[:, :, 0], d2[:, :, 3]
+
+    # TODO: see if this gives the 45 deg tilt axes curvatures too
+    print('d2', d2)
+
+    d_xx, d_yy = d2[:, :, 0] / 2, d2[:, :, 3] / 2
     d_zz = -(d_xx + d_yy)
 
     coeffs = np.concatenate((np.array([s.names]).T,
-                             d0, d_x, d_xx/2,
-                             d0, d_y, d_yy/2,
-                             d0, d_z, d_zz/2), axis=1)
+                             d0, d_x, d_xx,
+                             d0, d_y, d_yy,
+                             d0, d_z, d_zz), axis=1)
     
     fit_order = 2
     axes = ['x', 'y', 'z']
@@ -375,7 +388,7 @@ def get_electrode_coeffs(s, ion_pos,
     df.to_csv(filename)
     return coeffs
 
-def get_axes_unitv_potentials(s, length=20., res=10001, shift={'z': 0}, tilt_theta=0):
+def get_axes_unitv_potentials(s, length=10., res=10001, shift={'z': 0}, tilt_theta=0):
     '''
     Define axes and retrieve potentials along each axis.
 
@@ -455,7 +468,7 @@ def solve_axes_coeffs(axis, p, order=0):
     c_arr.append(c)
     return c_arr, A, residuals[0]
 
-def get_electrode_curvatures(s, x, y, z, p_x, p_y, p_z, ion_height,
+def get_electrode_coeffs_fit(s, x, y, z, p_x, p_y, p_z, ion_height,
                              filename=str(datetime.now().strftime('%Y-%m-%d-%H-%M-%S')) + '_gds_quetzal.csv',
                              plot=False):
     filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
@@ -522,11 +535,10 @@ def get_electrode_curvatures(s, x, y, z, p_x, p_y, p_z, ion_height,
 def load_coeffs(filename):
     filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
     df = pd.read_csv(filename, usecols=['c_x1', 'c_x2', 'c_y1', 'c_y2', 'c_z1', 'c_z2'])
-    # df = pd.read_csv(filename, usecols=['c_x0', 'c_x1', 'c_x2', 'c_y0', 'c_y1', 'c_y2', 'c_z0', 'c_z1', 'c_z2'])
     return df.to_numpy()
 
-def solve_voltages(el_names, fitted_coeffs, target_curvature, groups, filename,
-                   coeff_indices=np.arange(6)):
+def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
+                   coeff_indices=np.arange(6), exact=False):
     '''
     Solves for electrode potentials.
     Inputs:
@@ -538,12 +550,20 @@ def solve_voltages(el_names, fitted_coeffs, target_curvature, groups, filename,
     # remove constant terms from matrix
     # A = np.delete(A, [0, 3, 6], 1)
     # remove rf and gnd electrodes
-    A = np.delete(A, [-1, -2], 0)
+    # A = np.delete(A, [-1, -2], 0)
     # convert from 2nd order target curvature
     # to target coefficients
-    target_coeffs = np.array(target_curvature)/2
 
+    fit_coeffs = []
     A_grouped = []
+
+    for index in coeff_indices:
+        fit_coeffs.append(target_coeffs[index])
+
+    fit_coeffs = np.array(fit_coeffs)
+    print('Target fit coefficients: ', fit_coeffs)
+    print()
+
     for group in groups:
         group_coeffs = np.zeros(6)
         for electrode_name in group:
@@ -555,15 +575,15 @@ def solve_voltages(el_names, fitted_coeffs, target_curvature, groups, filename,
             f_order = [0, 2, 4]
             for f in f_order:
                 # if (np.abs(group_coeffs[f] * micron_to_m) < threshold):
-                # group_coeffs[f] = np.round(group_coeffs[f] * micron_to_m, 3) / micron_to_m
-                group_coeffs[f] = np.round(group_coeffs[f] * micron_to_m, 3)
+                group_coeffs[f] = np.round(group_coeffs[f] * micron_to_m, 3) / micron_to_m
+                # group_coeffs[f] = np.round(group_coeffs[f] * micron_to_m, 3)
             # checking if we should remove second-order
             s_order = [1, 3, 5]
             for s in s_order:
                 # if (np.abs(group_coeffs[s] * micron_to_m**2) < threshold):
                 #     group_coeffs[s] = 0
-                # group_coeffs[f] = np.round(group_coeffs[f] * micron_to_m**2, 3) / (micron_to_m**2)
-                group_coeffs[s] = np.round(group_coeffs[s] * micron_to_m**2, 3)
+                group_coeffs[f] = np.round(group_coeffs[f] * micron_to_m**2, 3) / (micron_to_m**2)
+                # group_coeffs[s] = np.round(group_coeffs[s] * micron_to_m**2, 3)
 
         # do_clean_data = False
         # if (do_clean_data):
@@ -580,7 +600,12 @@ def solve_voltages(el_names, fitted_coeffs, target_curvature, groups, filename,
         #             group_coeffs[s] = 0
 
         A_grouped.append(group_coeffs)
-        print('group coefficients', group_coeffs)
+    
+    A_grouped = np.array(A_grouped)
+    '''
+    A_grouped:
+    An n x 6 matrix where n is the number of groups.
+    '''
 
     ''' adjust target coefficients. '''
     # f_order = [0, 2, 4]
@@ -589,26 +614,23 @@ def solve_voltages(el_names, fitted_coeffs, target_curvature, groups, filename,
     # s_order = [1, 3, 5]
     # for s in s_order:
     #     target_coeffs[s] *= micron_to_m ** 2
-
-
-    A_grouped = np.array(A_grouped)
+    '''
+    Reduces the number of degrees of freedom.
+    '''
     A_grouped_compact = np.array([A_grouped[:, coeff_indices[0]]])
 
     for i in range (1, len(coeff_indices)):
         A_grouped_compact = np.append(A_grouped_compact, np.array([A_grouped[:, coeff_indices[i]]]),
                                            axis=0)
-    
-    print('A grouped compact', A_grouped_compact)
-    # A_grouped[np.abs(A_grouped)<1e-17] = 0
-
-    group_voltages = np.linalg.solve(A_grouped_compact, target_coeffs)
-    # group_voltages = np.linalg.solve(A_grouped.T, target_coeffs)
-
-
-    # A_grouped = np.array(A_grouped)
-    # group_voltages, residuals, rank, s = np.linalg.lstsq(A_grouped.T, target_coeffs, rcond=1e-11)
-    print('matrix multiplication', np.matmul(A_grouped_compact, group_voltages))
-    # print('matrix multiplication', np.matmul(A_grouped.T, group_voltages))
+    print('A grouped compact:')
+    print(A_grouped_compact)
+    print()
+    group_voltages = []
+    if (exact):
+        group_voltages = np.linalg.solve(A_grouped_compact, target_coeffs)
+    else:
+        group_voltages, residuals, rank, s = np.linalg.lstsq(A_grouped_compact, fit_coeffs, rcond=-1)
+    print('Matrix multiplication results: ', np.matmul(A_grouped_compact, group_voltages))
 
     electrode_voltages = np.zeros(len(el_names))
     for i in range(len(groups)):
@@ -620,13 +642,12 @@ def solve_voltages(el_names, fitted_coeffs, target_curvature, groups, filename,
     el_df.to_csv(filename, index=False)
     return electrode_voltages, group_voltages
 
-def plot_fitted_curvature(s, electrode_voltages, target_curvature, ion_height,
+def plot_fitted_coeffs(s, electrode_voltages, target_coeffs, ion_height,
                           length=20, res=10001, shift={'z': 0}, target_coeff_indices=[1, 3, 5],
                           plot_target=True):
     x3d, x = single_axis('x', bounds=(-length/2,length/2), res=res, shift=shift)
     y3d, y = single_axis('y', bounds=(-length/2,length/2), res=res, shift=shift)
     z3d, z = single_axis('z', bounds=(-length/2,length/2), res=res, shift=shift)
-    target_coeffs = target_curvature / 2
     with s.with_voltages(dcs=electrode_voltages):
         vx = s.electrical_potential(x3d).T
         vy = s.electrical_potential(y3d).T
@@ -652,8 +673,8 @@ def plot_fitted_curvature(s, electrode_voltages, target_curvature, ion_height,
 
 def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
                 m=40*ct.atomic_mass, q=1*ct.elementary_charge,
-                l=1e-6, u_dc_axial_ref=[0., 4e-6, 0., -2e-6, 0., -2e-6],
-                u_dc_tilt_ref=[0., 0., 0., -2e-6, 0., 2e-6],
+                l=1e-6, dc_axial_ref_coeffs=[0., 2e-6, 0., -1e-6, 0., -1e-6],
+                dc_tilt_ref_coeffs=[0., 0., 0., -2e-6, 0., 2e-6],
                 dc_axial_set_file="Vs_2024-02-18_axial.csv",
                 dc_tilt_set_file="Vs_2024-02-18_tilt.csv",
                 do_plot_potential=True):
@@ -662,9 +683,9 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
     Solves for frequencies in axial and radial directions.
     '''
 
-    dc_axial_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/' + dc_axial_set_file
-    dc_tilt_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/' + dc_tilt_set_file
-    overall_dc_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/'
+    # dc_axial_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/' + dc_axial_set_file
+    # dc_tilt_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/' + dc_tilt_set_file
+    # overall_dc_set_file = str(os.path.dirname(os.path.abspath(__file__))) + '/'
 
     # 3 MHz radial frequency default target
     o_rad = 2 * np.pi * f_rad
@@ -679,31 +700,24 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
     o_axial = 2 * np.pi * f_axial
     u_axial = o_axial**2 * m * l**2 / q
     print("Target axial frequency:", f_axial, "Hz")
-    print("DC curvature needed", u_axial, "V/µm^2")
+    print("DC axial curvature needed", u_axial, "V/µm^2")
 
-    # by laplace's equation, laplacian of dc potential
+    # by gauss's law, laplacian of dc potential
     # in free space is 0. use (+2, -1, -1) distribution.
     # have solved for the dc voltage sets previously.
-
     radial_anticonfinement = u_axial / 2
-
     # dc curvature scales linearly with voltage.
-    u_dc = [0, u_axial, 0, -radial_anticonfinement, 0, -radial_anticonfinement]
-    dc_div = np.array(u_dc)/np.array(u_dc_axial_ref)
-    vdc_scaling = np.max(dc_div[np.isfinite(dc_div)])
-    print("DC Voltage needs scaling up by:", vdc_scaling)
-
-
+    dc_div = u_axial/(2*np.array(dc_axial_ref_coeffs)[1])
+    v_axial_scaling = np.max(dc_div[np.isfinite(dc_div)])
+    print("DC axial voltage scales up by:", v_axial_scaling)
     print("\n")
 
-    ### read axial basis voltage set
-    # scale up by required dc sclaing
-    dc_df = pd.read_csv(dc_axial_set_file)
-    dc_axial_set = dc_df["V"]
+    # read axial basis voltage set
+    dc_axial_set, dc_tilt_set = read_electrode_voltages([dc_axial_set_file, dc_tilt_set_file])
+    # scale up by required dc scaling
     print("Basis axial DC voltage set:\n", dc_axial_set.T)
-    dc_axial_set *= vdc_scaling
+    dc_axial_set *= v_axial_scaling
     print("Scaled axial DC voltage set:\n", dc_axial_set.T)
-    dc_axial_set = np.array(dc_axial_set)
 
     ### 2. solve required pp curvature for 3MHz
     # with additional anticonfinement
@@ -715,11 +729,10 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
 
     u_rad = o_rad**2 * m * l**2 / q
     print("Target radial frequency:", f_rad, "Hz")
-    print("Curvature needed:", u_rad, "V/µm^2")
+    print("Radial curvature needed:", u_rad, "V/µm^2")
 
     u_rad += radial_anticonfinement
     print("Curvature with anticonfinement compensation needed:", u_rad, "V/µm^2")
-
     print("\n")
 
     # find curvature produced at v_p = 10V
@@ -731,6 +744,7 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
     print("PP saddle point found at:", x0, "µm")
 
     curves, modes_pp = s.modes(x0)
+    curves[curves < 0] = 0
     f_rad_initial = np.sqrt(q*curves/m)/(2*np.pi*l)
 
     print(f"V_peak = {vp}V.")
@@ -740,7 +754,6 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
     # since curvature scales as V_peak^2,
     # want y,z-axis curvatures to scale to target u_rad.
     # calculate using mean of y,z curvatures
-
     curvature_scaling = u_rad / np.mean([curves[1], curves[2]])
     print("Curvature needs scaling up by:", curvature_scaling)
     vp_scaling = np.sqrt(curvature_scaling)
@@ -756,32 +769,33 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
     print("PP saddle point found at:", x0, "µm")
 
     curves, modes_pp = s.modes(x0)
+    curves[curves < 0] = 0
     achievable_f_rad = np.sqrt(q*curves/m)/(2*np.pi*l)
 
     print(f"Scaled V_peak = {vp}V.")
     print("Curvature:", curves)
     print("Scaled radial frequencies:", achievable_f_rad)
-
     print("\n")
 
     # scale up by required dc scaling
     v_tilt_scaling = solve_tilt_scaling(f_rad=f_rad,
                         f_split=f_split, m=m, q=q, l=l,
-                        u_dc_tilt_ref=u_dc_tilt_ref)
+                        dc_tilt_ref_coeffs=dc_tilt_ref_coeffs)
     ### read tilt basis voltage set
-    dc_tilt_df = pd.read_csv(dc_tilt_set_file)
-    dc_tilt_set = dc_tilt_df["V"]
+    # dc_tilt_df = pd.read_csv(dc_tilt_set_file)
+    # dc_tilt_set = dc_tilt_df["V"]
+    # dc_tilt_set = read_electrode_voltages([dc_tilt_set_file])
+    print("DC tilt voltage scales up by:", v_tilt_scaling)
     print("Basis tilt DC voltage set:\n", dc_tilt_set.T)
     dc_tilt_set *= v_tilt_scaling
     print("Scaled tilt DC voltage set:\n", dc_tilt_set.T)
-    dc_tilt_set = np.array(dc_tilt_set)
 
     dc_electrode_set = dc_axial_set + dc_tilt_set
     print('Overall electrode set:', dc_electrode_set)
-
-    # with s.with_voltages(dcs=dc_axial_set):
+    # dc_electrode_set = dc_axial_set
+    print(dc_electrode_set)
     with s.with_voltages(dcs=dc_electrode_set):
-        tmp_len = 20
+        tmp_len = 20.
         res = 10001
         shift = {'z': x0[2]}
         x3d, x = single_axis('x', (-tmp_len/2,tmp_len/2), res, shift=shift)
@@ -819,20 +833,20 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
             plot_potential(s=s, freqs=freqs, modes=modes)
             plot_field(s=s)
             plt.show()
-
+    
     overall_dc_df = pd.DataFrame(dc_electrode_set)
-    overall_dc_set_file += f'RF{round(f_traprf/1e6, 0)}MHz-trapx{round(freqs[0]/1e6, 0)}MHz-y_prime{round(freqs[1]/1e6, 0)}MHz-z_prime{round(freqs[2]/1e6, 0)}MHz-{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv'
-    overall_dc_df.to_csv(overall_dc_set_file, index=False)
+    overall_dc_set_file = f'RF{round(f_traprf/1e6, 0)}MHz-trapx{round(freqs[0]/1e6, 0)}MHz-y_prime{round(freqs[1]/1e6, 0)}MHz-z_prime{round(freqs[2]/1e6, 0)}MHz-{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv'
+    overall_dc_df.to_csv( append_filepath(overall_dc_set_file), index=False)
 
-def solve_tilt_scaling(f_rad=30e6, f_split=0.2e6,
+def solve_tilt_scaling(f_rad=3e6, f_split=0.2e6,
                 m=40*ct.atomic_mass, q=1*ct.elementary_charge,
-                l=1e-6, u_dc_tilt_ref=[0., 0., 0., -2e-6, 0., 2e-6]):
+                l=1e-6, dc_tilt_ref_coeffs=[0., 0., 0., -1e-6, 0., +1e-6]):
     o_rad_minor = 2*np.pi*(f_rad + f_split/2) # minor axis of elliptic potential -> higher curvature
     o_rad_major = 2*np.pi*(f_rad - f_split/2) # major axis of elliptic potential
     u_rad_minor = o_rad_minor**2 * m * l**2 / q
     u_rad_major = o_rad_major**2 * m * l**2 / q
     u_diff = u_rad_minor - u_rad_major
-    v_tilt_scaling = (u_diff / 2) / u_dc_tilt_ref[-1]
+    v_tilt_scaling = (u_diff / 2) / (2 * dc_tilt_ref_coeffs[-1])
     return v_tilt_scaling
 
 
@@ -841,7 +855,8 @@ def plot_potential(s, d_r=10, contour_res=1000, freqs=[], modes=[]):
     Plots the potential distribution in the xy and yx planes.
     Produces contour plots from which the curvature can be intuited.
     '''
-    ion_height = s.minimum([0, 0, 50.])[2]
+    ion_height = s.minimum([0., 0., 50.])[2]
+    # ion_height = 51.7
     # make grid for potential view in z = z0 plane - top view looking down
     grid_xy, tsx0, tsy0 = make_xy_grid_flat([-40.,40.], [-40., 40.], ion_height, [101, 101])
     # make grid for potential view in x = 0 plane - side view

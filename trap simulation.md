@@ -14,6 +14,13 @@ Electrode simulation goals
 	- basis voltage sets
 	- overall tilt+confining voltage sets
 
+Apr 15
+- I think I fixed it! The voltages returned are now symmetric and make sense.
+- Summary of major fixes:
+	- Using built-in electrode derivatives instead of doing second-order fit.
+	- Use least-squares instead of exact solver.
+	- Use approx trap to generate a voltage set that makes sense as a reference first.
+
 Based on work - Feb 18 [[todo]]
 1. Set RF = 30MHz, and find the corresponding $V_{peak}$ that gives $f_{pp,y} \approx f_{pp,z} \approx 3MHz$. (Radial frequencies)
 	- Using the freqs_pp calculation, we find that the required curvature for 3MHz is:
