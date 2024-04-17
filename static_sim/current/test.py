@@ -9,9 +9,25 @@ import shapely as sh
 s, electrodes, electrodes_dict = load_trap(filename='single_chip.gds',
             electrode_layer=37,
             ito_layer=12, electrode_mapping=default_electrode_mapping,
-            electrode_ordering=electrode_ordering, plot=True,
+            electrode_ordering=electrode_ordering, plot=False,
             xlim=(-5000,5000), ylim=(-3000,3000), trap_center=default_trap_center, buildup=False)
 
+dc_axial_set_file = 'Apr15_gds_Vs_axial.csv'
+dc_tilt_set_file = 'Apr16_approx_Vs_tilt.csv'
+
+dc_axial_set, dc_tilt_set = read_electrode_voltages([dc_axial_set_file, dc_tilt_set_file])
+
+o_traprf = 2*np.pi * 35e6
+q = 1 * ct.elementary_charge
+m = 40 * ct.atomic_mass
+l = 1e-6
+vp = 20.
+
+with s.with_voltages(dc_tilt_set * 10 + dc_axial_set):
+    s["r"].rf = vp*np.sqrt(q/m)/(2*l*o_traprf)
+    plot_potential(s=s)
+    plot_field(s=s, is_dc_potential=True)
+    plt.show()
 # shape = [[ -560. ,   102.5],
 #        [ -560. ,  1112.5],
 #        [-1135. ,  1595. ],

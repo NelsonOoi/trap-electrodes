@@ -404,16 +404,19 @@ def get_axes_unitv_potentials(s, length=10., res=10001, shift={'z': 0}, tilt_the
     x3d, x = single_axis('x', bounds=(-length/2,length/2), res=res, shift=shift)
     y3d, y = single_axis('y', bounds=(-length/2,length/2), res=res, shift=shift)
     z3d, z = single_axis('z', bounds=(-length/2,length/2), res=res, shift=shift)
+    # z = z + shift['z']
     if(tilt_theta != 0):
         y3d, y = tilt_single_axis(tilt_theta, 'y_prime', bounds=(-length/2,length/2), res=res, shift=shift)
         z3d, z = tilt_single_axis(tilt_theta, 'z_prime', bounds=(-length/2,length/2), res=res, shift=shift)
-
+        print('y3d:', y3d)
+        print('y:', y)
+        print('z3d:', z3d)
+        print('z:', z)
     # find individual potential contributions
     p_x = s.individual_potential(x3d, 0)
     p_y = s.individual_potential(y3d, 0)
     p_z = s.individual_potential(z3d, 0)
 
-    z = z + shift['z']
     return [x, y, z, p_x, p_y, p_z]
 
 def get_axes_potentials(s, length=20., res=10001, shift={'z': 0}, tilt_theta=0):
@@ -443,7 +446,7 @@ def get_axes_potentials(s, length=20., res=10001, shift={'z': 0}, tilt_theta=0):
     p_y = s.electrical_potential(y3d, typ='dc', derivative=0)
     p_z = s.electrical_potential(z3d, typ='dc', derivative=0)
 
-    z = z + shift['z']
+    # z = z + shift['z']
     return [x, y, z, p_x, p_y, p_z]
 
 '''
@@ -471,7 +474,6 @@ def solve_axes_coeffs(axis, p, order=0):
 def get_electrode_coeffs_fit(s, x, y, z, p_x, p_y, p_z, ion_height,
                              filename=str(datetime.now().strftime('%Y-%m-%d-%H-%M-%S')) + '_gds_quetzal.csv',
                              plot=False):
-    filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
     fitted_coeffs = []
     residuals = []
     z_new = z
@@ -504,9 +506,9 @@ def get_electrode_coeffs_fit(s, x, y, z, p_x, p_y, p_z, ion_height,
                 # plot numerical solution
                 ax[i].set_xlabel('µm')
                 if(i == 2):
-                    ax[i].set_title(f'Voltage along {ax_name}')
+                    ax[i].set_title(f'Potential along {ax_name}')
                 else:
-                    ax[i].set_title(f'Voltage along {ax_name}, at z = {ion_height}µm')
+                    ax[i].set_title(f'Potential along {ax_name}, at z = {ion_height}µm')
                 ax[i].plot(ax_coord, measured[ax_name], label='Measured')
                 # plot predicted fit
                 ax[i].plot(ax_coord, predicted, label=f'Predicted, residual: {residual_str}')
@@ -528,12 +530,13 @@ def get_electrode_coeffs_fit(s, x, y, z, p_x, p_y, p_z, ion_height,
     # print(overall_residuals)
     savefile = np.concatenate((np.array([s.names]).T, np.array(fitted_coeffs), np.array(residuals)), axis=1)
     df = pd.DataFrame(savefile, columns=columns)
-    df.to_csv(filename)
+    df.to_csv(append_filepath(filename))
     # print(columns)
     return [fitted_coeffs, residuals]
 
 def load_coeffs(filename):
-    filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
+    # filename = str(os.path.dirname(os.path.abspath(__file__))) + '/' + filename
+    filename = append_filepath(filename)
     df = pd.read_csv(filename, usecols=['c_x1', 'c_x2', 'c_y1', 'c_y2', 'c_z1', 'c_z2'])
     return df.to_numpy()
 
@@ -814,7 +817,7 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
         ax[2].plot(z, vz, label='Electrode contribution')
         axes_names = ['x', 'y', 'z']
         for i in range(len(ax)):
-            ax[i].set_title(f'{axes_names[i]}-axis potential')
+            ax[i].set_title(f'{axes_names[i]}-axis RF + DC potential')
             ax[i].set_ylabel('V')
             ax[i].set_xlabel('µm')
 
@@ -876,6 +879,7 @@ def plot_potential(s, d_r=10, contour_res=1000, freqs=[], modes=[]):
         ax[i].set_title(titles[i])
         ax[i].set_xlabel(labels[i][0])
         ax[i].set_ylabel(labels[i][1])
+        ax[i].set_aspect('equal')
         fig.colorbar(bgc)
     scaling = 10
     axial = modes[0] * scaling
@@ -901,7 +905,6 @@ def plot_potential(s, d_r=10, contour_res=1000, freqs=[], modes=[]):
     ax[1].arrow(0., ion_height, dx=radial_2[1]*(1-yz_scaling), dy=radial_2[2]*(1-yz_scaling), color=color, **yz_arrow_style)
     ax[1].annotate(f'{round(freqs[1]/1e6, 3)} MHz', xy=[radial_1[1]/2, radial_1[2]/2 + ion_height], xytext=(4, 0), color=color, textcoords='offset points')
     ax[1].annotate(f'{round(freqs[2]/1e6, 3)} MHz', xy=[radial_2[1]/2, radial_2[2]/2 + ion_height], xytext=(4, 0), color=color, textcoords='offset points')
-    plt.gca().set_aspect('equal')
     # plt.show()
 
 def plot_field(s, grid=0, x_grid_bounds=(-100., 100.),
@@ -998,7 +1001,6 @@ def read_electrode_voltages(files=[]):
     for filename in files:
         filename = append_filepath(filename=filename)
         el_v = pd.read_csv(filename, header=None)
-        print(el_v)
         if ('V' in el_v.columns or 'V' in el_v.values):
             el_v = el_v.to_numpy().flatten()
             el_v = np.delete(el_v, np.where(el_v == 'V'))
@@ -1048,7 +1050,7 @@ def tilt_single_axis(theta, axis, bounds, res, shift={'z': 0}):
         line3d = np.column_stack([zeros, ts_cos.T, ts_sin.T])
     if (axis == 'z_prime'):
         line3d = np.column_stack([zeros, -ts_sin.T, ts_cos.T])
-
+        # line3d = line3d[::-1]
     # to shift line height
     for key, val in shift.items():
         if (key == 'x'):
