@@ -59,7 +59,7 @@ Method 1. fit second-order polynomial.
 '''
 Method 2. extract using electrode derivative calculator.
 '''
-# derivs = get_electrode_coeffs(s=s, ion_pos=ion_pos, filename=coeff_filename)
+derivs = get_electrode_coeffs(s=s, ion_pos=ion_pos, filename=coeff_filename)
 
 '''
 Load saved coefficients from file and prepare to solve voltages.
@@ -100,8 +100,7 @@ print()
 electrode_v, group_v = solve_voltages(el_names=s.names,
                     fitted_coeffs=fc, target_coeffs=target_axial_coeffs,
                     groups=groups, filename=Vs_axial_filename,
-                    coeff_indices=coeff_indices
-                    )
+                    coeff_indices=coeff_indices)
 # with s.with_voltages(electrode_v):
 #     print(s.electrical_potential(ion_pos, 'dc', derivative=2, expand=True))
 #     print(s.electrical_potential(ion_pos, 'dc', derivative=2, expand=False))
@@ -136,7 +135,7 @@ tilt_fc, residuals = get_electrode_coeffs_fit(s, *r_tilt,
                             ion_height=ion_height,
                             filename=tilt_coeff_filename, plot=False)
 tilt_fc = load_coeffs(filename=tilt_coeff_filename)
-target_tilt_coeffs = np.array([0., 0., 0., -2e-6, 0., +2e-6])
+target_tilt_coeffs = np.array([0., 0., 0., -1e-5, 0., +1e-5])
 tilt_groups = [['1'], ['11'], ['5', '7'], ['6'], ['15', '17'], ['16']]
 tilt_coeff_indices = np.arange(6)
 # tilt_coeff_indices = [0, 1, 2, 3, 4, 5]
@@ -145,7 +144,9 @@ tilt_electrode_v, tilt_group_v = solve_voltages(el_names=s.names,
                     fitted_coeffs=tilt_fc, target_coeffs=target_tilt_coeffs,
                     coeff_indices=tilt_coeff_indices,
                     groups=tilt_groups, filename=Vs_tilt_filename,
-                    exact=True)
+                    # exact=True,
+                    exact=False
+                    )
 
 plot_length = 20.
 plot_fitted_coeffs(s=s, electrode_voltages=tilt_electrode_v,
@@ -153,8 +154,7 @@ plot_fitted_coeffs(s=s, electrode_voltages=tilt_electrode_v,
                     ion_height=ion_height, length=plot_length,
                     shift={'z': ion_height},
                     # target_coeff_indices=coeff_indices,
-                    plot_target=False
-                    )
+                    plot_target=False)
 # with s.with_voltages(tilt_electrode_v):
 #     print(s.electrical_potential(ion_pos, 'dc', derivative=2, expand=True))
 #     print(s.electrical_potential(ion_pos, 'dc', derivative=2, expand=False))
@@ -168,10 +168,11 @@ take the difference between the two u_axial components along y' and z'
 compensate using the tilt voltage
 '''
 
-solve_freqs(s=s, f_rad=3e6, f_split=1e6, f_axial=1e6, f_traprf=35e6,
+solve_freqs(s=s, f_rad=3.5e6, f_split=1e6, f_axial=1e6, f_traprf=35e6,
             m=40.*ct.atomic_mass, q=1.*ct.elementary_charge,
             l=1e-6, dc_axial_ref_coeffs=target_axial_coeffs,
             dc_tilt_ref_coeffs=target_tilt_coeffs,
             dc_axial_set_file=Vs_axial_filename,
             dc_tilt_set_file=Vs_tilt_filename,
-            do_plot_potential=True)
+            do_plot_potential=True,
+            save_result=False)

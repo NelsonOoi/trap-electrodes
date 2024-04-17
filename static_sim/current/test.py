@@ -14,8 +14,10 @@ s, electrodes, electrodes_dict = load_trap(filename='single_chip.gds',
 
 dc_axial_set_file = 'Apr15_gds_Vs_axial.csv'
 dc_tilt_set_file = 'Apr16_approx_Vs_tilt.csv'
+dc_gds_tilt_set_file = 'Apr16_gds_Vs_tilt.csv'
+dc_tilt_karan_file = 'Vs_tilt_karan.csv'
 
-dc_axial_set, dc_tilt_set = read_electrode_voltages([dc_axial_set_file, dc_tilt_set_file])
+dc_axial_set, dc_tilt_set, dc_tilt_karan, dc_gds_tilt_set = read_electrode_voltages([dc_axial_set_file, dc_tilt_set_file, dc_tilt_karan_file, dc_gds_tilt_set_file])
 
 o_traprf = 2*np.pi * 35e6
 q = 1 * ct.elementary_charge
@@ -23,11 +25,22 @@ m = 40 * ct.atomic_mass
 l = 1e-6
 vp = 20.
 
-with s.with_voltages(dc_tilt_set * 10 + dc_axial_set):
+with s.with_voltages(dc_tilt_karan):
     s["r"].rf = vp*np.sqrt(q/m)/(2*l*o_traprf)
-    plot_potential(s=s)
-    plot_field(s=s, is_dc_potential=True)
-    plt.show()
+    # plot_potential(s=s)
+    plot_field(s=s, is_dc_potential=True, x_grid_bounds=(-10,10), y_grid_bounds=(-10,10), z_grid_bounds=(40,60))
+
+with s.with_voltages(dc_tilt_set):
+    s["r"].rf = vp*np.sqrt(q/m)/(2*l*o_traprf)
+    # plot_potential(s=s)
+    plot_field(s=s, is_dc_potential=True, x_grid_bounds=(-10,10), y_grid_bounds=(-10,10), z_grid_bounds=(40,60))
+
+with s.with_voltages(dc_gds_tilt_set):
+    s["r"].rf = vp*np.sqrt(q/m)/(2*l*o_traprf)
+    # plot_potential(s=s)
+    plot_field(s=s, is_dc_potential=True, x_grid_bounds=(-10,10), y_grid_bounds=(-10,10), z_grid_bounds=(40,60))
+
+plt.show()
 # shape = [[ -560. ,   102.5],
 #        [ -560. ,  1112.5],
 #        [-1135. ,  1595. ],

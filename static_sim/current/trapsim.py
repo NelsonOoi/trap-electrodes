@@ -7,6 +7,7 @@ import matplotlib.cm as cm
 from electrode import (System, PolygonPixelElectrode, euler_matrix,
     PointPixelElectrode, PotentialObjective,
     PatternRangeConstraint, shaped, utils)
+import scipy.optimize as sciopt
 from scipy.signal import argrelextrema
 from scipy.optimize import minimize
 from scipy.optimize import linprog
@@ -365,12 +366,11 @@ def get_electrode_coeffs(s, ion_pos,
     # solve for d_zz using laplace.
 
     d2 = s.individual_potential(ion_pos, 2)
-
-    # TODO: see if this gives the 45 deg tilt axes curvatures too
-    print('d2', d2)
-
     d_xx, d_yy = d2[:, :, 0] / 2, d2[:, :, 3] / 2
     d_zz = -(d_xx + d_yy)
+
+    # TODO: the entry with index 4 corresponds to dy dz,
+    # does this also match the curvature along tilted axes?
 
     coeffs = np.concatenate((np.array([s.names]).T,
                              d0, d_x, d_xx,
@@ -486,8 +486,8 @@ def get_electrode_coeffs_fit(s, x, y, z, p_x, p_y, p_z, ion_height,
         measured = {'x': p_x[electrode_num].flatten(), 'y': p_y[electrode_num].flatten(), 'z': p_z[electrode_num].flatten()}
         num_axes = len(axes)
         if (plot):
-            fig_width = 15
-            fig, ax = plt.subplots(1, num_axes, figsize=(fig_width, 1/2*fig_width))
+            fig_width = 23
+            fig, ax = plt.subplots(1, num_axes, figsize=(fig_width, 1/num_axes*fig_width))
             ax = ax.flat
             ax[0].set_ylabel('V')
             electrode_name = s.names[electrode_num]
@@ -632,7 +632,14 @@ def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
     if (exact):
         group_voltages = np.linalg.solve(A_grouped_compact, target_coeffs)
     else:
-        group_voltages, residuals, rank, s = np.linalg.lstsq(A_grouped_compact, fit_coeffs, rcond=-1)
+        # group_voltages, residuals, rank, s = np.linalg.lstsq(A_grouped_compact, fit_coeffs, rcond=-1)
+
+        '''
+        Test using scipy's bounded least squares,
+        to keep electrode voltages within -10V < v < +10V.
+        '''
+        res = sciopt.lsq_linear(A=A_grouped_compact, b=fit_coeffs, bounds=(-2, 2), lsmr_tol='auto', verbose=1)
+        group_voltages = res.x
     print('Matrix multiplication results: ', np.matmul(A_grouped_compact, group_voltages))
 
     electrode_voltages = np.zeros(len(el_names))
@@ -656,7 +663,7 @@ def plot_fitted_coeffs(s, electrode_voltages, target_coeffs, ion_height,
         vy = s.electrical_potential(y3d).T
         vz = s.electrical_potential(z3d).T
         
-        fig, ax = plt.subplots(1, 3, figsize=(15,5))
+        fig, ax = plt.subplots(1, 3, figsize=(23,7))
         ax = ax.flat
         ax[0].plot(x, vx[0], label='Electrode contribution')
         ax[0].set_title('x-axis')
@@ -669,10 +676,11 @@ def plot_fitted_coeffs(s, electrode_voltages, target_coeffs, ion_height,
             ax[0].plot(x, target_coeffs[target_coeff_indices[0]] * x**2 +vx[0][int((vx.size+1)/2)], label='Allcock curvature')
             ax[1].plot(y, target_coeffs[target_coeff_indices[1]] * y**2 +vy[0][int((vy.size+1)/2)], label='Allcock curvature')
             ax[2].plot(z+ion_height, target_coeffs[target_coeff_indices[2]] * z**2 +vz[0][int((vz.size+1)/2)], label='Allcock curvature')
+        ax[0].set_ylabel('V')
         for i in range(3):
             ax[i].set_xlabel('µm')
-            ax[i].set_ylabel('V')
             ax[i].legend()
+            ax[i].grid()
 
 def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
                 m=40*ct.atomic_mass, q=1*ct.elementary_charge,
@@ -680,7 +688,8 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
                 dc_tilt_ref_coeffs=[0., 0., 0., -2e-6, 0., 2e-6],
                 dc_axial_set_file="Vs_2024-02-18_axial.csv",
                 dc_tilt_set_file="Vs_2024-02-18_tilt.csv",
-                do_plot_potential=True):
+                do_plot_potential=True,
+                save_result=True):
 
     '''
     Solves for frequencies in axial and radial directions.
@@ -781,9 +790,10 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
     print("\n")
 
     # scale up by required dc scaling
-    v_tilt_scaling = solve_tilt_scaling(f_rad=f_rad,
+    v_tilt_scaling, tilt_coeff_needed = solve_tilt_scaling(f_rad=f_rad,
                         f_split=f_split, m=m, q=q, l=l,
                         dc_tilt_ref_coeffs=dc_tilt_ref_coeffs)
+    print('Tilt coeff needed:', tilt_coeff_needed)
     ### read tilt basis voltage set
     # dc_tilt_df = pd.read_csv(dc_tilt_set_file)
     # dc_tilt_set = dc_tilt_df["V"]
@@ -798,6 +808,9 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
     # dc_electrode_set = dc_axial_set
     print(dc_electrode_set)
     with s.with_voltages(dcs=dc_electrode_set):
+        x_guess = [0., 0., 50.]
+        x0 = s.minimum(x_guess)
+        ion_height = x0[2]
         tmp_len = 20.
         res = 10001
         shift = {'z': x0[2]}
@@ -814,12 +827,14 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
         # make plots of overall rf + dc potential
         ax[0].plot(x, vx, label='Electrode contribution')
         ax[1].plot(y, vy, label='Electrode contribution')
-        ax[2].plot(z, vz, label='Electrode contribution')
+        ax[2].plot(z + ion_height, vz, label='Electrode contribution')
+        ax[2].axvline(x=ion_height, linestyle='--', color='r')
         axes_names = ['x', 'y', 'z']
+        ax[0].set_ylabel('V')
         for i in range(len(ax)):
             ax[i].set_title(f'{axes_names[i]}-axis RF + DC potential')
-            ax[i].set_ylabel('V')
             ax[i].set_xlabel('µm')
+            ax[i].grid()
 
         # uncomment for static & mathieu analysis
         rf_scale = s.rf_scale(m, q, l, o_traprf)
@@ -837,9 +852,10 @@ def solve_freqs(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
             plot_field(s=s)
             plt.show()
     
-    overall_dc_df = pd.DataFrame(dc_electrode_set)
-    overall_dc_set_file = f'RF{round(f_traprf/1e6, 0)}MHz-trapx{round(freqs[0]/1e6, 0)}MHz-y_prime{round(freqs[1]/1e6, 0)}MHz-z_prime{round(freqs[2]/1e6, 0)}MHz-{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv'
-    overall_dc_df.to_csv( append_filepath(overall_dc_set_file), index=False)
+    if (save_result):
+        overall_dc_df = pd.DataFrame(dc_electrode_set)
+        overall_dc_set_file = f'RF{round(f_traprf/1e6, 0)}MHz-trapx{round(freqs[0]/1e6, 0)}MHz-y_prime{round(freqs[1]/1e6, 0)}MHz-z_prime{round(freqs[2]/1e6, 0)}MHz-{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv'
+        overall_dc_df.to_csv(append_filepath(overall_dc_set_file), index=False)
 
 def solve_tilt_scaling(f_rad=3e6, f_split=0.2e6,
                 m=40*ct.atomic_mass, q=1*ct.elementary_charge,
@@ -850,7 +866,7 @@ def solve_tilt_scaling(f_rad=3e6, f_split=0.2e6,
     u_rad_major = o_rad_major**2 * m * l**2 / q
     u_diff = u_rad_minor - u_rad_major
     v_tilt_scaling = (u_diff / 2) / (2 * dc_tilt_ref_coeffs[-1])
-    return v_tilt_scaling
+    return v_tilt_scaling, u_diff/2/2
 
 
 def plot_potential(s, d_r=10, contour_res=1000, freqs=[], modes=[]):
@@ -859,14 +875,14 @@ def plot_potential(s, d_r=10, contour_res=1000, freqs=[], modes=[]):
     Produces contour plots from which the curvature can be intuited.
     '''
     ion_height = s.minimum([0., 0., 50.])[2]
-    # ion_height = 51.7
+    # ion_height = 51.7µm for GDS
     # make grid for potential view in z = z0 plane - top view looking down
     grid_xy, tsx0, tsy0 = make_xy_grid_flat([-40.,40.], [-40., 40.], ion_height, [101, 101])
     # make grid for potential view in x = 0 plane - side view
     grid_yz, tsy1, tsz1 = make_yz_grid_flat(0., [-d_r,d_r], [np.round(ion_height)-d_r, np.round(ion_height)+d_r], [101, 101])
     grids = [[grid_xy, tsx0, tsy0], [grid_yz, tsy1, tsz1]]
     
-    fig, ax = plt.subplots(1, 2, figsize=(20,7))
+    fig, ax = plt.subplots(1, 2, figsize=(23,7))
 
     titles = [f'Potential in xy-plane at z={ion_height}', f'Potential in yz-plane at x={0}']
     labels = [['x-axis(µm)', 'y-axis(µm)'], ['y-axis(µm)', 'z-axis(µm)']]
