@@ -36,7 +36,8 @@ def axial_shuttle(
         electrode_width=120,
         electrode_gap=5,
         valid_positions=valid_positions,
-        start_dc_set_file='Apr16_approx_Vs_axial.csv'
+        start_dc_set_file='Apr16_approx_Vs_axial.csv',
+        interp_type='bezier'
     ):
     assert start in valid_positions, 'Ensure that start position is valid.'
     assert end in valid_positions, 'Ensure that end position is valid.'
@@ -56,7 +57,15 @@ def axial_shuttle(
     # dx2 = 1.6366598620507583e-05
     dx2 = 2e-6
     target_axial_coeffs = [0., dx2, 0., -dx2/2, 0., -dx2/2]
-    steps = np.linspace(0, total_displacement, keyframes)
+    steps = []
+    match interp_type:
+        case 'linear':
+            steps = np.linspace(0, total_displacement, keyframes)
+        case 'bezier':
+            steps = bezier_steps(keyframes, total_displacement)
+        case 'param':
+            steps = parametric_steps(keyframes, total_displacement)
+
     # print('Steps: ', steps)
 
     # '''
@@ -126,12 +135,21 @@ def axial_shuttle(
         waveform.append(electrode_v)
     return waveform
 
+def bezier_steps(keyframes, total_displacement):
+    t = np.linspace(0, 1, keyframes)
+    return t * t * (3. - 2. * t) * total_displacement
 
-
+def parametric_steps(keyframes, total_displacement, alpha=2.):
+    t = np.linspace(0, 1, keyframes)
+    sq = t**2
+    return sq / (alpha * (sq - t) + 1.) * total_displacement
 
 print(type(valid_positions))
-waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1.)
+bezier_waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1., interp_type='bezier')
+linear_waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1., interp_type='linear')
+param_waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1., interp_type='param')
 
+waveforms = [bezier_waveform, linear_waveform, param_waveform]
 # def plot_waveform(s, waveform, length=500., res=10001):
 #     plt.ion()
 
@@ -152,6 +170,40 @@ waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1.)
 #     ax.grid()
 #     plt.show()
 
+def interactive_plot_compare_waveform(s, waveforms, names, length=1000., res=10001):
+    plt.ion()
+    fig, ax = plt.subplots(1, 1, figsize=(10,7))
+    ax.set_title('x-axis')
+    ax.grid()
+    ax.set_ylim(-0.08, 0.08)
+    x0 = s.minimum([0., 0., 51.7])
+    shift = {'z': x0[2]}
+    x3d, x = single_axis('x', (-length/2, length/2), res, shift=shift)
+
+    '''
+    there is probably a neater way to do this. found it.
+    '''
+    lines = []
+    for i in range(len(waveforms)):
+        line1 = 0
+        with s.with_voltages(waveforms[i][0]):
+            vx = s.electrical_potential(x3d).T
+            line1, = ax.plot(x, vx[0], label=f'{names[i]}')
+        lines.append(line1)
+    plt.legend()
+    
+    for i in range(1, len(waveforms[0])):
+        for j in range(len(waveforms)):
+            with s.with_voltages(waveforms[j][i]):
+                vx = s.electrical_potential(x3d).T
+                lines[j].set_ydata(vx[0])
+        fig.canvas.draw()
+        # time.sleep(0.03)
+        fig.canvas.flush_events()
+    plt.ioff()
+
+interactive_plot_compare_waveform(s=s, waveforms=waveforms, names=['bezier', 'linear', 'parametric'])
+
 def interactive_plot_waveform(s, waveform, length=1000., res=10001):
     plt.ion()
     fig, ax = plt.subplots(1, 1, figsize=(10,7))
@@ -160,7 +212,6 @@ def interactive_plot_waveform(s, waveform, length=1000., res=10001):
     ax.set_ylim(-0.08, 0.08)
     x0 = s.minimum([0., 0., 51.7])
     shift = {'z': x0[2]}
-    tmp_len = 20.
     x3d, x = single_axis('x', (-length/2, length/2), res, shift=shift)
 
     electrode_v = waveform[0]
@@ -178,4 +229,4 @@ def interactive_plot_waveform(s, waveform, length=1000., res=10001):
         time.sleep(0.03)
         fig.canvas.flush_events() 
     plt.ioff()
-interactive_plot_waveform(s=s, waveform=waveform)
+# interactive_plot_waveform(s=s, waveform=waveform)
