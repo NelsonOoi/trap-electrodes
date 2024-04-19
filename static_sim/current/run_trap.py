@@ -6,7 +6,7 @@ list2 = ['r', 'gnd']
 electrode_ordering = electrode_ordering + list2
 trap_center = [(4920+5040)/2, (5502.5 + 5297.5)/2]
 
-approx_trap = False
+approx_trap = True
 Vs_axial_filename = f'{today.strftime("%b%d")}_gds_Vs_axial.csv'
 Vs_tilt_filename = f'{today.strftime("%b%d")}_gds_Vs_tilt.csv'
 coeff_filename=f'{today.strftime("%b%d")}_gds_quetzal.csv'
@@ -93,7 +93,8 @@ coeff_indices = np.arange(5)
 # 3 DOF case.
 # target_axial_coeffs = np.array([2e-6, -1e-6, -1e-6])
 # coeff_indices = [1, 3, 5]
-groups = [['1', '11'], ['6', '16'], ['5', '7', '15', '17']]
+# groups = [['1', '11'], ['6', '16'], ['5', '7', '15', '17']]
+groups = [['1', '11'], ['6', '16'], ['5','15'], ['7', '17']]
 print('Using electrode grouping:', groups)
 print()
 

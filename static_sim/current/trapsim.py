@@ -339,6 +339,7 @@ def save_trap(el_map, name='quetzal'):
         json.dump(el_dict, outfile)
 
 def get_electrode_coeffs(s, ion_pos,
+                         save_file=True,
                          filename=str(datetime.now().strftime('%Y-%m-%d-%H-%M-%S')) + '_gds_quetzal.csv'):
     '''
     NOTE: This is an experimental implementation using electrode only
@@ -372,21 +373,23 @@ def get_electrode_coeffs(s, ion_pos,
     # TODO: the entry with index 4 corresponds to dy dz,
     # does this also match the curvature along tilted axes?
 
-    coeffs = np.concatenate((np.array([s.names]).T,
+    fit_coeffs = np.concatenate((d_x, d_xx, d_y, d_yy, d_z, d_zz), axis=1)
+
+    full_coeffs = np.concatenate((np.array([s.names]).T,
                              d0, d_x, d_xx,
                              d0, d_y, d_yy,
                              d0, d_z, d_zz), axis=1)
     
-    fit_order = 2
-    axes = ['x', 'y', 'z']
-    columns = ['id']
-    for i in axes:
-        for j in range(fit_order+1):
-            columns.append('c_'+str(i)+str(j))
-    
-    df = pd.DataFrame(coeffs, columns=columns)
-    df.to_csv(filename)
-    return coeffs
+    if (save_file):
+        fit_order = 2
+        axes = ['x', 'y', 'z']
+        columns = ['id']
+        for i in axes:
+            for j in range(fit_order+1):
+                columns.append('c_'+str(i)+str(j))
+        df = pd.DataFrame(full_coeffs, columns=columns)
+        df.to_csv(filename)
+    return fit_coeffs
 
 def get_axes_unitv_potentials(s, length=10., res=10001, shift={'z': 0}, tilt_theta=0):
     '''
@@ -541,7 +544,7 @@ def load_coeffs(filename):
     return df.to_numpy()
 
 def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
-                   coeff_indices=np.arange(6), exact=False):
+                   coeff_indices=np.arange(6), save_file=True, exact=False):
     '''
     Solves for electrode potentials.
     Inputs:
@@ -625,9 +628,9 @@ def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
     for i in range (1, len(coeff_indices)):
         A_grouped_compact = np.append(A_grouped_compact, np.array([A_grouped[:, coeff_indices[i]]]),
                                            axis=0)
-    print('A grouped compact:')
-    print(A_grouped_compact)
-    print()
+    # print('A grouped compact:')
+    # print(A_grouped_compact)
+    # print()
     group_voltages = []
     if (exact):
         group_voltages = np.linalg.solve(A_grouped_compact, target_coeffs)
@@ -638,7 +641,7 @@ def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
         Test using scipy's bounded least squares,
         to keep electrode voltages within -10V < v < +10V.
         '''
-        res = sciopt.lsq_linear(A=A_grouped_compact, b=fit_coeffs, bounds=(-2, 2), lsmr_tol='auto', verbose=1)
+        res = sciopt.lsq_linear(A=A_grouped_compact, b=fit_coeffs, bounds=(-4, 4), lsmr_tol='auto', verbose=1)
         group_voltages = res.x
     print('Matrix multiplication results: ', np.matmul(A_grouped_compact, group_voltages))
 
@@ -648,8 +651,9 @@ def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
             electrode_voltages[el_names.index(electrode_name)] = group_voltages[i]
 
     # save generated voltages to csv
-    el_df = pd.DataFrame(electrode_voltages.T, columns=["V"])
-    el_df.to_csv(filename, index=False)
+    if (save_file):
+        el_df = pd.DataFrame(electrode_voltages.T, columns=["V"])
+        el_df.to_csv(filename, index=False)
     return electrode_voltages, group_voltages
 
 def plot_fitted_coeffs(s, electrode_voltages, target_coeffs, ion_height,
