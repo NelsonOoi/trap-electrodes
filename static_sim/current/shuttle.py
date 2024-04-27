@@ -133,7 +133,7 @@ def axial_shuttle(
                         filename='', coeff_indices=coeff_indices)
         print('Electrode voltages:', electrode_v)
         waveform.append(electrode_v)
-    return waveform
+    return np.array(waveform)
 
 def bezier_steps(keyframes, total_displacement):
     t = np.linspace(0, 1, keyframes)
@@ -145,30 +145,47 @@ def parametric_steps(keyframes, total_displacement, alpha=2.):
     return sq / (alpha * (sq - t) + 1.) * total_displacement
 
 print(type(valid_positions))
-bezier_waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1., interp_type='bezier')
-linear_waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1., interp_type='linear')
-param_waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1., interp_type='param')
+bezier_waveform = axial_shuttle(start='6', end='5', path_resolution_bound=5., interp_type='bezier')
+# linear_waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1., interp_type='linear')
+# param_waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1., interp_type='param')
 
-waveforms = [bezier_waveform, linear_waveform, param_waveform]
-# def plot_waveform(s, waveform, length=500., res=10001):
-#     plt.ion()
+# waveforms = [bezier_waveform, linear_waveform, param_waveform]
+def plot_waveform(s, waveform, length=500., res=10001):
+    plt.ioff()
+    fig, ax = plt.subplots(1, 1, figsize=(10,7))
+    x0 = s.minimum([0., 0., 51.7])
+    shift = {'z': x0[2]}
+    tmp_len = 20.
+    x3d, x = single_axis('x', (-length/2, length/2), res, shift=shift)
+    for electrode_v in waveform:
+        vx, line1 = 0, 0
+        with s.with_voltages(electrode_v):
+            vx = s.electrical_potential(x3d).T
+            line1, = ax.plot(x, vx[0], label='Electrode contribution')
+    line1.set_ydata(x[0]) 
+    fig.canvas.draw() 
+    fig.canvas.flush_events() 
+    ax.set_xlabel('x-axis')
+    ax.set_ylabel('Potential (V)')
+    ax.set_title('Bezier shuttling profile')
+    ax.grid()
+    plt.show()
 
-#     fig, ax = plt.subplots(1, 1, figsize=(10,7))
-#     x0 = s.minimum([0., 0., 51.7])
-#     shift = {'z': x0[2]}
-#     tmp_len = 20.
-#     x3d, x = single_axis('x', (-length/2, length/2), res, shift=shift)
-#     for electrode_v in waveform:
-#         vx, line1 = 0, 0
-#         with s.with_voltages(electrode_v):
-#             line1, = ax.plot(x, vx[0], label='Electrode contribution')
-#             vx = s.electrical_potential(x3d).T
-#     line1.set_ydata(x[0]) 
-#     fig.canvas.draw() 
-#     fig.canvas.flush_events() 
-#     ax.set_title('x-axis')
-#     ax.grid()
-#     plt.show()
+plot_waveform(s, waveform=bezier_waveform)
+
+def show_shuttling_electrode_voltages(s, waveform, title):
+    plt.ioff()
+    fig, ax = plt.subplots(1, 1, figsize=(10,7))
+    ax.grid()
+    ax.set_title(title)
+    ax.set_ylabel('Voltage (V)')
+    ax.set_xlabel('Shuttling timestep')
+    for i in range(len(s.names)):
+        ax.plot(waveform[:, i].T, label=f'El. {s.names[i]}')
+    plt.legend()
+    plt.show()
+
+# show_shuttling_electrode_voltages(s, waveforms[0], title='Bezier')
 
 def interactive_plot_compare_waveform(s, waveforms, names, length=1000., res=10001):
     plt.ion()
@@ -202,7 +219,10 @@ def interactive_plot_compare_waveform(s, waveforms, names, length=1000., res=100
         fig.canvas.flush_events()
     plt.ioff()
 
-interactive_plot_compare_waveform(s=s, waveforms=waveforms, names=['bezier', 'linear', 'parametric'])
+'''
+Run this to see evolution of waveforms.
+'''
+# interactive_plot_compare_waveform(s=s, waveforms=waveforms, names=['bezier', 'linear', 'parametric'])
 
 def interactive_plot_waveform(s, waveform, length=1000., res=10001):
     plt.ion()
@@ -230,3 +250,26 @@ def interactive_plot_waveform(s, waveform, length=1000., res=10001):
         fig.canvas.flush_events() 
     plt.ioff()
 # interactive_plot_waveform(s=s, waveform=waveform)
+
+'''
+Show different interpolation methods.
+'''
+def demo_interpolations(keyframes=101):
+    demo_bezier = bezier_steps(keyframes, 1)
+    demo_param = parametric_steps(keyframes, 1)
+    demo_linear = np.linspace(0, 1, keyframes)
+    x = np.arange(keyframes)
+
+    fig, ax = plt.subplots(1, 1, figsize=(7,7))
+    # plt.axis('square')
+    ax.plot(x, demo_bezier, label='bezier')
+    ax.plot(x, demo_linear, label='linear')
+    ax.plot(x, demo_param, label='parametric')
+    ax.set_ylabel('Progress to completion (%)')
+    ax.set_xlabel('Timesteps')
+    ax.grid()
+    plt.legend()
+    plt.ioff()
+    plt.show()
+
+# demo_interpolations()

@@ -507,7 +507,7 @@ def get_electrode_coeffs_fit(s, x, y, z, p_x, p_y, p_z, ion_height,
             predicted = np.dot(A, np.array(c_arr).T)
             if (plot):
                 # plot numerical solution
-                ax[i].set_xlabel('µm')
+                ax[i].set_xlabel(f'{ax_name} (µm)')
                 if(i == 2):
                     ax[i].set_title(f'Potential along {ax_name}')
                 else:

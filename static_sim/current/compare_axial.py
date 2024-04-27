@@ -64,9 +64,16 @@ shift = {'z': 51.7}
 x3d, x = single_axis('x', bounds=(-length/2,length/2), res=res, shift=shift)
 
 
-files = ['Vs_axial_karan.csv', 'Vs_axial125_karan_recentered.csv']
-names = ['Vs_axial', 'Vs_axial125 recentered on electrode 6']
-colors = ['orange', 'black']
+# files = ['Vs_axial_karan.csv', 'Vs_axial125_karan_recentered.csv']
+# names = ['Vs_axial', 'Vs_axial125 recentered on electrode 6']
+
+files = ['Vs_axial_karan.csv', 'Vs_axial125_karan_recentered.csv', 'Apr22_gds_Vs_axial.csv', 'Apr22_7dof_gds_Vs_axial.csv']
+names = ['Vs_axial', 'Vs_axial125 recentered on electrode 6', 'Apr 22 new 5 electrodes a side', 'Apr 22 new 7 electrodes a side']
+
+# files = ['Vs_axial_karan.csv', 'Apr22_gds_Vs_axial.csv']
+# names = ['Vs_axial', 'Apr 22 new 5 electrodes a side']
+colors = ['orange', 'green', 'black', 'blue']
+# colors = ['orange', 'black']
 overall = read_electrode_voltages(files=files)
 
 plt.figure(figsize=(10,5))

@@ -6,7 +6,7 @@ list2 = ['r', 'gnd']
 electrode_ordering = electrode_ordering + list2
 trap_center = [(4920+5040)/2, (5502.5 + 5297.5)/2]
 
-approx_trap = True
+approx_trap = False
 Vs_axial_filename = f'{today.strftime("%b%d")}_gds_Vs_axial.csv'
 Vs_tilt_filename = f'{today.strftime("%b%d")}_gds_Vs_tilt.csv'
 coeff_filename=f'{today.strftime("%b%d")}_gds_quetzal.csv'
@@ -88,20 +88,27 @@ coeff_indices = np.arange(5)
 # groups = [['1', '11'], ['4', '8'], ['14', '18'], ['5', '6', '7', '15', '16', '17'], ['3', '13'], ['9', '19']]
 # groups = [['1'],  ['11'], ['4', '8'], ['14', '18'], ['5', '6', '7'], ['15', '16', '17']] # gives unphysical 10^11 results.
 
+# 7 DOF case
+# groups = [['1', '11'], ['6', '16', '5','15', '7', '17'], ['4', '14', '8', '18', '3', '13', '9', '19']]
+# Vs_axial_filename = f'{today.strftime("%b%d")}_7elec_gds_Vs_axial.csv'
+
 # 5 DOF case.
+groups = [['1', '11'], ['6', '16', '5','15', '7', '17'], ['4', '14', '8', '18']]
+Vs_axial_filename = f'{today.strftime("%b%d")}_5elec_gds_Vs_axial.csv'
 
 # 3 DOF case.
 # target_axial_coeffs = np.array([2e-6, -1e-6, -1e-6])
 # coeff_indices = [1, 3, 5]
 # groups = [['1', '11'], ['6', '16'], ['5', '7', '15', '17']]
-groups = [['1', '11'], ['6', '16'], ['5','15'], ['7', '17']]
+# groups = [['1', '11'], ['6', '16'], ['5','15'], ['7', '17']]
+
 print('Using electrode grouping:', groups)
 print()
 
 electrode_v, group_v = solve_voltages(el_names=s.names,
                     fitted_coeffs=fc, target_coeffs=target_axial_coeffs,
                     groups=groups, filename=Vs_axial_filename,
-                    coeff_indices=coeff_indices)
+                    coeff_indices=coeff_indices, save_file=True)
 # with s.with_voltages(electrode_v):
 #     print(s.electrical_potential(ion_pos, 'dc', derivative=2, expand=True))
 #     print(s.electrical_potential(ion_pos, 'dc', derivative=2, expand=False))
@@ -176,4 +183,4 @@ solve_freqs(s=s, f_rad=3.5e6, f_split=1e6, f_axial=1e6, f_traprf=35e6,
             dc_axial_set_file=Vs_axial_filename,
             dc_tilt_set_file=Vs_tilt_filename,
             do_plot_potential=True,
-            save_result=False)
+            save_result=True)
