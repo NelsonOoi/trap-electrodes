@@ -9,8 +9,9 @@ from electrode import (System, PolygonPixelElectrode, euler_matrix,
     PatternRangeConstraint, shaped, utils)
 import scipy.optimize as sciopt
 from scipy.signal import argrelextrema
-from scipy.optimize import minimize
-from scipy.optimize import linprog
+from scipy.optimize import minimize, linprog
+from scipy.integrate import solve_ivp
+from scipy.fft import fft, fftfreq
 import math
 import json
 import pandas as pd
@@ -59,8 +60,8 @@ default_electrode_mapping = {
 # used to center figure
 center_electrodes = ['6', '16']
 default_trap_center = [(4920+5040)/2, (5502.5 + 5297.5)/2]
-micron_to_m = 1e6
-
+m_to_micron = 1e6
+micron_to_m = 1e-6
 
 electrode_ordering = [str(i) for i in range(1, 21)]
 list2 = ['r', 'gnd']
@@ -580,16 +581,16 @@ def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
             # checking if we should remove first-order
             f_order = [0, 2, 4]
             for f in f_order:
-                # if (np.abs(group_coeffs[f] * micron_to_m) < threshold):
-                group_coeffs[f] = np.round(group_coeffs[f] * micron_to_m, 3) / micron_to_m
-                # group_coeffs[f] = np.round(group_coeffs[f] * micron_to_m, 3)
+                # if (np.abs(group_coeffs[f] * m_to_micron) < threshold):
+                group_coeffs[f] = np.round(group_coeffs[f] * m_to_micron, 3) / m_to_micron
+                # group_coeffs[f] = np.round(group_coeffs[f] * m_to_micron, 3)
             # checking if we should remove second-order
             s_order = [1, 3, 5]
             for s in s_order:
-                # if (np.abs(group_coeffs[s] * micron_to_m**2) < threshold):
+                # if (np.abs(group_coeffs[s] * m_to_micron**2) < threshold):
                 #     group_coeffs[s] = 0
-                group_coeffs[f] = np.round(group_coeffs[f] * micron_to_m**2, 3) / (micron_to_m**2)
-                # group_coeffs[s] = np.round(group_coeffs[s] * micron_to_m**2, 3)
+                group_coeffs[f] = np.round(group_coeffs[f] * m_to_micron**2, 3) / (m_to_micron**2)
+                # group_coeffs[s] = np.round(group_coeffs[s] * m_to_micron**2, 3)
 
         # do_clean_data = False
         # if (do_clean_data):
@@ -597,12 +598,12 @@ def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
         #     # checking if we should remove first-order
         #     f_order = [0, 2, 4]
         #     for f in f_order:
-        #         if (np.abs(group_coeffs[f] * micron_to_m) < threshold):
+        #         if (np.abs(group_coeffs[f] * m_to_micron) < threshold):
         #             group_coeffs[f] = 0
         #     # checking if we should remove second-order
         #     s_order = [1, 3, 5]
         #     for s in s_order:
-        #         if (np.abs(group_coeffs[s] * micron_to_m**2) < threshold):
+        #         if (np.abs(group_coeffs[s] * m_to_micron**2) < threshold):
         #             group_coeffs[s] = 0
 
         A_grouped.append(group_coeffs)
@@ -616,10 +617,10 @@ def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
     ''' adjust target coefficients. '''
     # f_order = [0, 2, 4]
     # for f in f_order:
-    #     target_coeffs[f] *= micron_to_m
+    #     target_coeffs[f] *= m_to_micron
     # s_order = [1, 3, 5]
     # for s in s_order:
-    #     target_coeffs[s] *= micron_to_m ** 2
+    #     target_coeffs[s] *= m_to_micron ** 2
     '''
     Reduces the number of degrees of freedom.
     '''
