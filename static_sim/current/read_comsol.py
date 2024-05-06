@@ -24,8 +24,7 @@ for el in el_nums:
     fig, ax = plt.subplots(1, 3, figsize=(20,6))
     fig.suptitle(f'Electrode {el}.')
     ax = ax.flatten()
-    for i in range(len(axis_names)): 
-        axis = axis_names[i]
+    for i, axis in enumerate(axis_names): 
         filename = prefix + str(el) + '_' + axis + suffix
         filename = append_filepath(filename='') + 'COMSOL/' + filename
         # print(filename)

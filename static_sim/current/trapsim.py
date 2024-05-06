@@ -63,6 +63,10 @@ default_trap_center = [(4920+5040)/2, (5502.5 + 5297.5)/2]
 m_to_micron = 1e6
 micron_to_m = 1e-6
 
+dx2 = 2e-6
+target_axial_coeffs = [0., dx2, 0., -dx2/2, 0., -dx2/2]
+target_tilt_coeffs = [0., 0., 0., -1e-5, 0., 1e-5]
+
 electrode_ordering = [str(i) for i in range(1, 21)]
 list2 = ['r', 'gnd']
 
@@ -545,7 +549,7 @@ def load_coeffs(filename):
     return df.to_numpy()
 
 def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
-                   coeff_indices=np.arange(6), save_file=True, exact=False):
+                   coeff_indices=np.arange(6), save_file=True, exact=False, verbose=0):
     '''
     Solves for electrode potentials.
     Inputs:
@@ -568,8 +572,6 @@ def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
         fit_coeffs.append(target_coeffs[index])
 
     fit_coeffs = np.array(fit_coeffs)
-    print('Target fit coefficients: ', fit_coeffs)
-    print()
 
     for group in groups:
         group_coeffs = np.zeros(6)
@@ -642,9 +644,12 @@ def solve_voltages(el_names, fitted_coeffs, target_coeffs, groups, filename,
         Test using scipy's bounded least squares,
         to keep electrode voltages within -10V < v < +10V.
         '''
-        res = sciopt.lsq_linear(A=A_grouped_compact, b=fit_coeffs, bounds=(-4, 4), lsmr_tol='auto', verbose=1)
+        res = sciopt.lsq_linear(A=A_grouped_compact, b=fit_coeffs, bounds=(-4, 4),
+                                lsmr_tol='auto', verbose=verbose)
         group_voltages = res.x
-    print('Matrix multiplication results: ', np.matmul(A_grouped_compact, group_voltages))
+    if(verbose):
+        print('Target fit coefficients: ', fit_coeffs)
+        print('Matrix multiplication results: ', np.matmul(A_grouped_compact, group_voltages))
 
     electrode_voltages = np.zeros(len(el_names))
     for i in range(len(groups)):
@@ -1172,3 +1177,28 @@ def trapf_minima():
     for i in range(2, 4):
         ax[i].set_ylim(-0.05, 0.05)
     # plt.suptitle('Curvature against frequency due to RF only.')
+
+
+'''
+All interpolation functions take scaled time as an input:
+i.e. 0 <= t <= 1
+'''
+def sine_interp(t):
+    if (t < 1):
+        return 0.5 * (1 - np.cos(np.pi * t))
+    return 1.
+
+def bezier_interp(t):
+    return t * t * (3. - 2. * t)
+
+def param_interp(t, alpha=2.):
+    sq = t**2
+    return sq / (alpha * (sq - t) + 1.)
+
+def bezier_steps(keyframes, total_displacement):
+    t = np.linspace(0, 1, keyframes)
+    return bezier_interp(t) * total_displacement
+
+def parametric_steps(keyframes, total_displacement, alpha=2.):
+    t = np.linspace(0, 1, keyframes)
+    return param_interp(t, alpha=alpha) * total_displacement

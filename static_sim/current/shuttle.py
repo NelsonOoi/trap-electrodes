@@ -36,7 +36,7 @@ def axial_shuttle(
         electrode_width=120,
         electrode_gap=5,
         valid_positions=valid_positions,
-        start_dc_set_file='Apr16_approx_Vs_axial.csv',
+        init_dc_set_filename='Apr16_approx_Vs_axial.csv',
         interp_type='bezier'
     ):
     assert start in valid_positions, 'Ensure that start position is valid.'
@@ -48,9 +48,9 @@ def axial_shuttle(
     print('Keyframes: ', keyframes)
     is_going_left = (total_displacement < 0)
 
-    start_dc_set = read_electrode_voltages([start_dc_set_file])[0]
-    with (s.with_voltages(start_dc_set)):
-        start_pos = s.minimum([0., 0., 51.7])
+    init_dc_set = read_electrode_voltages([init_dc_set_filename])[0]
+    with (s.with_voltages(init_dc_set)):
+        start_pos = s.minimum(start_pos)
         start_pos[np.abs(start_pos)<1e-6] = 0
 
     # obtained from run_trap.py
@@ -122,7 +122,9 @@ def axial_shuttle(
         Re-compute groupings based on current position.
         '''
         cur_pos_groups = [['1', '11']]
-        for i in range(-1, 2):
+        left = -2
+        right = 2
+        for i in range(left, right+1):
             side_electrode_pos = cur_electrode_pos + i
             cur_pos_groups.append([f'{side_electrode_pos}', f'{side_electrode_pos + 10}'])
         print('Initial grouping:', cur_pos_groups)
@@ -145,7 +147,7 @@ def parametric_steps(keyframes, total_displacement, alpha=2.):
     return sq / (alpha * (sq - t) + 1.) * total_displacement
 
 print(type(valid_positions))
-bezier_waveform = axial_shuttle(start='6', end='5', path_resolution_bound=5., interp_type='bezier')
+bezier_waveform = axial_shuttle(start='6', end='5', path_resolution_bound=1., interp_type='bezier')
 # linear_waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1., interp_type='linear')
 # param_waveform = axial_shuttle(start='6', end='4', path_resolution_bound=1., interp_type='param')
 
@@ -180,12 +182,12 @@ def show_shuttling_electrode_voltages(s, waveform, title):
     ax.set_title(title)
     ax.set_ylabel('Voltage (V)')
     ax.set_xlabel('Shuttling timestep')
-    for i in range(len(s.names)):
-        ax.plot(waveform[:, i].T, label=f'El. {s.names[i]}')
+    for i, name in enumerate(s.names):
+        ax.plot(waveform[:, i].T, label=f'El. {name}')
     plt.legend()
     plt.show()
 
-# show_shuttling_electrode_voltages(s, waveforms[0], title='Bezier')
+show_shuttling_electrode_voltages(s, bezier_waveform, title='Bezier')
 
 def interactive_plot_compare_waveform(s, waveforms, names, length=1000., res=10001):
     plt.ion()
@@ -219,12 +221,12 @@ def interactive_plot_compare_waveform(s, waveforms, names, length=1000., res=100
         fig.canvas.flush_events()
     plt.ioff()
 
-'''
-Run this to see evolution of waveforms.
-'''
 # interactive_plot_compare_waveform(s=s, waveforms=waveforms, names=['bezier', 'linear', 'parametric'])
 
 def interactive_plot_waveform(s, waveform, length=1000., res=10001):
+    '''
+    Observe evolution of potential waveforms.
+    '''
     plt.ion()
     fig, ax = plt.subplots(1, 1, figsize=(10,7))
     ax.set_title('x-axis')
@@ -251,10 +253,10 @@ def interactive_plot_waveform(s, waveform, length=1000., res=10001):
     plt.ioff()
 # interactive_plot_waveform(s=s, waveform=waveform)
 
-'''
-Show different interpolation methods.
-'''
 def demo_interpolations(keyframes=101):
+    '''
+    Show different interpolation methods.
+    '''
     demo_bezier = bezier_steps(keyframes, 1)
     demo_param = parametric_steps(keyframes, 1)
     demo_linear = np.linspace(0, 1, keyframes)
