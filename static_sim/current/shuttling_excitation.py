@@ -37,6 +37,13 @@ files = ['Apr22_5elec_RF35.0MHz-trapx1.0MHz.csv', 'Vs_axial_karan.csv', 'Vs_axia
 overall = read_electrode_voltages(files=files)
 voltage_set = overall[0]
 
+o_axial = 2 * np.pi * 1e6
+m = 40 * ct.atomic_mass
+l = 1e-6
+q = ct.elementary_charge
+u_axial = o_axial**2 * m * l**2 / q
+dc_div = u_axial/(2*np.array(target_axial_coeffs)[1])
+
 def get_current_electrode_groups(
                     start_well_pos, start_electrode_pos,
                     cur_well_pos,
@@ -68,7 +75,8 @@ def simulate_excitation(s, f_interp, n_phonon=[0.5], modes=[1e6],
                         end_electrode_pos=5,
                         init_dc_set_filename='Apr16_approx_Vs_axial.csv',
                         electrode_width=120.,
-                        electrode_gap=5.
+                        electrode_gap=5.,
+                        dc_mult=dc_div
                         ):
     '''
     Calculates ion excitation after transport.
@@ -99,11 +107,9 @@ def simulate_excitation(s, f_interp, n_phonon=[0.5], modes=[1e6],
     total_displacement = (end_electrode_pos - cur_electrode_pos) * (electrode_width + electrode_gap)
     def axial_efield(x, t, t_shuttling_start=t_shuttling_start, t_shuttling=t_shuttling):
         field_x = []
-        if (t < t_shuttling_start):
-            with s.with_voltages(dcs=init_dc_set):
-                field_x = - s.potential([x * m_to_micron, 0, ion_height], 1).flatten()[0] / micron_to_m
-            return field_x, start_well_pos
-        elif (t >= t_shuttling_start):
+        electrode_v = dc_mult * init_dc_set
+        cur_well_pos = start_well_pos    
+        if (t >= t_shuttling_start):
             # NOTE solve the shuttling waveform here.
             scaled_t = (t - t_shuttling_start) / t_shuttling
             cur_well_pos = [f_interp(scaled_t) * total_displacement, 0., ion_height]
@@ -119,9 +125,10 @@ def simulate_excitation(s, f_interp, n_phonon=[0.5], modes=[1e6],
                         target_coeffs=target_axial_coeffs,
                         groups=cur_electrode_groups, save_file=False,
                         filename='', coeff_indices=coeff_indices)
-            with s.with_voltages(dcs=electrode_v):
-                field_x = - s.potential([x * m_to_micron, 0, ion_height], 1).flatten()[0] / micron_to_m
-            return field_x, cur_well_pos
+            electrode_v = dc_mult * electrode_v
+        with s.with_voltages(dcs=electrode_v):
+            field_x = - s.potential([x * m_to_micron, 0, ion_height], 1).flatten()[0] / micron_to_m
+        return field_x, cur_well_pos
 
     def fun(t, u):
         x, v = u
@@ -155,7 +162,23 @@ def simulate_excitation(s, f_interp, n_phonon=[0.5], modes=[1e6],
     # plt.legend()
     plt.grid()
     plt.title('Ion oscillation at axial frequency.')
+    
+
+    N_new = N//5
+    yf = fft(result.y[0, :][-N_new : ] - total_displacement * micron_to_m)
+    xf = fftfreq(N_new, (t_maxplot - t_shuttling - t_shuttling_start)/N_new)[:N_new//2]
+    print('result:', result.y[0, :][-N_new : ] - total_displacement * micron_to_m)
+    print('fft:', yf, 'freq:', xf)
+    plt.figure()
+    plt.plot(xf, 2.0/N_new * np.abs(yf[0:N_new//2]), label = "FFT")
+    # plt.plot([math.sin(t) for t in t_pts], "o", label="Analytical solution")
+    plt.xlabel("f (Hz)")
+    plt.ylabel("FFT Magnitude of ending oscillation.")
+    plt.xscale("log")
+    plt.legend()
+    plt.grid()
     plt.show()
+    
     return A0
 
 s, electrodes, electrodes_dict = load_trap()

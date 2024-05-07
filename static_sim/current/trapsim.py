@@ -63,8 +63,8 @@ default_trap_center = [(4920+5040)/2, (5502.5 + 5297.5)/2]
 m_to_micron = 1e6
 micron_to_m = 1e-6
 
-dx2 = 2e-6
-target_axial_coeffs = [0., dx2, 0., -dx2/2, 0., -dx2/2]
+axial_dx2 = 2e-6
+target_axial_coeffs = [0., axial_dx2, 0., -axial_dx2/2, 0., -axial_dx2/2]
 target_tilt_coeffs = [0., 0., 0., -1e-5, 0., 1e-5]
 
 electrode_ordering = [str(i) for i in range(1, 21)]

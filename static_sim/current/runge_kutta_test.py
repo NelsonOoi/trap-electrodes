@@ -110,6 +110,7 @@ with s.with_voltages(dcs=voltage_set):
     plt.grid()
     plt.title('Ion oscillation at axial frequency.')
     # plt.show()
+    print('Result: ', result.y[0,:])
 
     yf = fft(result.y[0,:])
     xf = fftfreq(N, t_maxplot/N)[:N//2]
