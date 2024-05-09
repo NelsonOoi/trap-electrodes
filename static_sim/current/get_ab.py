@@ -48,9 +48,9 @@ electrode_ordering = electrode_ordering + list2
 print(electrode_ordering)
 
 s = None
-approx_trap = False
-if (approx_trap):
-    s = trap()
+is_approx_trap = False
+if (is_approx_trap):
+    s = approx_trap()
 else:
     ''' Load trap from GDS.'''
     s, electrodes, electrodes_dict = load_trap(

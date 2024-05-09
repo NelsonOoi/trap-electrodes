@@ -8,7 +8,7 @@ import shapely as sh
 
 s, electrodes, electrodes_dict = load_trap(filename='single_chip.gds',
             electrode_layer=37,
-            ito_layer=12, electrode_mapping=default_electrode_mapping,
+            ito_layer=12, electrode_mapping=default_electrode_config,
             electrode_ordering=electrode_ordering, plot=False,
             xlim=(-5000,5000), ylim=(-3000,3000), trap_center=default_trap_center, buildup=False)
 

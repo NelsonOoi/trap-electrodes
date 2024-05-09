@@ -16,7 +16,7 @@ electrode_gap: 5µm by default.
 Assumes that the ion is currently centered on the starting electrode position.
 
 '''
-s = trap()
+s = approx_trap()
 '''Configure electrode parameters.'''
 l = 1e-6 # µm length scale
 u = 20. # V rf peak voltage

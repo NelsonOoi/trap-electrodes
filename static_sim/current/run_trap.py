@@ -5,8 +5,9 @@ electrode_ordering = [str(i) for i in range(1, 21)]
 list2 = ['r', 'gnd']
 electrode_ordering = electrode_ordering + list2
 trap_center = [(4920+5040)/2, (5502.5 + 5297.5)/2]
+trap_center = (0, 0)
 
-approx_trap = False
+is_approx_trap = False
 Vs_axial_filename = f'{today.strftime("%b%d")}_gds_Vs_axial.csv'
 Vs_tilt_filename = f'{today.strftime("%b%d")}_gds_Vs_tilt.csv'
 coeff_filename=f'{today.strftime("%b%d")}_gds_quetzal.csv'
@@ -14,8 +15,8 @@ tilt_coeff_filename=f'{today.strftime("%b%d")}_gds_tilt_quetzal.csv'
 # tilt_coeff_filename = '1_tilt_gds_quetzal.csv'
 
 s = None
-if(approx_trap):
-    s = trap()
+if(is_approx_trap):
+    s = approx_trap()
     Vs_axial_filename = f'{today.strftime("%b%d")}_approx_Vs_axial.csv'
     Vs_tilt_filename = f'{today.strftime("%b%d")}_approx_Vs_tilt.csv'
     coeff_filename=f'{today.strftime("%b%d")}_approx_quetzal.csv'
@@ -23,10 +24,10 @@ if(approx_trap):
     ''' Load trap from GDS.'''
 else:
     s, electrodes, electrodes_dict = load_trap(
-            filename='single_chip.gds',
-            electrode_layer=37,
-            ito_layer=12, electrode_mapping=default_electrode_mapping,
-            electrode_ordering=electrode_ordering, plot=False,
+            filename=append_filepath('single_chip_centered.gds'),
+            electrode_layer=default_electrode_config.get('electrode_layer'),
+            ito_layer=default_electrode_config.get('ito_layer'), electrode_mapping=default_electrode_config,
+            electrode_ordering=electrode_ordering, plot=True,
             xlim=(-5000,5000), ylim=(-3000,3000), trap_center=trap_center, buildup=False)
 
 '''Configure electrode parameters.'''
@@ -59,12 +60,12 @@ Method 1. fit second-order polynomial.
 '''
 Method 2. extract using electrode derivative calculator.
 '''
-derivs = get_electrode_coeffs(s=s, ion_pos=ion_pos, filename=coeff_filename)
+derivs = get_electrode_coeffs(s=s, ion_pos=ion_pos, filename=append_filepath(coeff_filename))
 
 '''
 Load saved coefficients from file and prepare to solve voltages.
 '''
-fc = load_coeffs(filename=coeff_filename)
+fc = load_coeffs(filename=append_filepath(coeff_filename))
 target_axial_coeffs = np.array([0., 2e-6, 0., -1e-6, 0.,-1e-6])
 
 '''
@@ -119,8 +120,7 @@ plot_fitted_coeffs(s=s, electrode_voltages=electrode_v,
                     ion_height=ion_height, length=plot_length,
                     shift={'z': ion_height},
                     # target_coeff_indices=coeff_indices,
-                    plot_target=True
-                    )
+                    plot_target=True)
 # plt.show()
 # solve_freqs(s=s, f_rad=3e6, f_split=0.2e6, f_axial=1e6, f_traprf=30e6,
 #             m=40.*ct.atomic_mass, q=1.*ct.elementary_charge,
@@ -138,7 +138,7 @@ First fit along tilted axes.
 '''
 r_tilt = get_axes_unitv_potentials(s=s, tilt_theta=np.pi/4, shift={'z': ion_height})
 
-'''Solve for tilt mode curvatures of unit voltage on electrodes.'''
+'''Solve for tilt curvatures due to unit voltage on each electrode.'''
 tilt_fc, residuals = get_electrode_coeffs_fit(s, *r_tilt,
                             ion_height=ion_height,
                             filename=tilt_coeff_filename, plot=False)
@@ -153,8 +153,7 @@ tilt_electrode_v, tilt_group_v = solve_voltages(el_names=s.names,
                     coeff_indices=tilt_coeff_indices,
                     groups=tilt_groups, filename=Vs_tilt_filename,
                     # exact=True,
-                    exact=False
-                    )
+                    exact=False)
 
 plot_length = 20.
 plot_fitted_coeffs(s=s, electrode_voltages=tilt_electrode_v,
@@ -176,7 +175,7 @@ take the difference between the two u_axial components along y' and z'
 compensate using the tilt voltage
 '''
 
-solve_freqs(s=s, f_rad=3.5e6, f_split=1e6, f_axial=1e6, f_traprf=35e6,
+solve_freqs_old(s=s, f_rad=3.5e6, f_split=1e6, f_axial=1e6, f_traprf=35e6,
             m=40.*ct.atomic_mass, q=1.*ct.elementary_charge,
             l=1e-6, dc_axial_ref_coeffs=target_axial_coeffs,
             dc_tilt_ref_coeffs=target_tilt_coeffs,
