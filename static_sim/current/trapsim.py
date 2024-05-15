@@ -55,11 +55,15 @@ default_electrode_config = {
     '24': 18,
     '25': 13,
     '26': 19,
+    "trap_center_electrode": 6,
+    "axial_electrodes": ["1", "11"],
     "electrode_layer": 37, 
     "ito_layer": 12,
     "axial_groups": [["1", "11"], ["5", "15", "6", "16", "7", "17"], ["4", "14", "8", "18"]],
     "tilt_groups" : [["1"], ["11"], ["5", "7"], ["6"], ["15", "17"], ["16"]]
 }
+
+default_artiq_config = {"1": 0.0, "2": 0.0, "3": 0.0, "4": 0.0, "5": 10.0, "6": 9.0, "7": 8.0, "8": 7.0, "9": 6.0, "10": 5.0, "11": 4.0, "12": 3.0, "13": 2.0, "14": 1.0, "15": 0.0, "16": 0.0, "17": 0.0, "18": 0.0, "19": 0.0, "20": 0.0, "21": 11.0, "22": 12.0, "23": 13.0, "24": 14.0, "25": 15.0, "26": 16.0, "27": 17.0, "28": 18.0, "29": 19.0, "30": 20.0, "31": 0.0, "32": 0.0}
 
 # used to center figure
 center_electrodes = ['6', '16']
@@ -685,11 +689,19 @@ def plot_fitted_coeffs(s, electrode_voltages, target_coeffs, ion_height,
 
 def solve_freqs(s, f_rad=[3e6, 4e6], f_axial=1e6, f_traprf=30e6,
                 m=40*ct.atomic_mass, q=1*ct.elementary_charge,
-                l=1e-6, dc_axial_ref_coeffs=[0., 2e-6, 0., -1e-6, 0., -1e-6],
-                dc_tilt_ref_coeffs=[0., 0., 0., -2e-6, 0., 2e-6],
-                dc_axial_set_file="Vs_2024-02-18_axial.csv",
-                dc_tilt_set_file="Vs_2024-02-18_tilt.csv",
-                do_plot_potential=True,
+                l=1e-6, dc_basis_axial_ref_coeffs=[0., 2e-6, 0., -1e-6, 0., -1e-6],
+                dc_basis_tilt_ref_coeffs=[0., 0., 0., -2e-6, 0., 2e-6],
+                dc_basis_axial_set_file='Vs_2024-02-18_axial.csv',
+                dc_basis_tilt_set_file='Vs_2024-02-18_tilt.csv',
+                dc_scaledfreq_axial_set_file='Vs_2024-02-18_axial_1MHz.csv',
+                dc_scaledfreq_tilt_set_file='Vs_2024-02-18_tilt_y_3MHz_z_4MHz.csv',
+                dc_scaledfreq_overall_set_file='Vs_2024-02-18_x_1MHz_y_3MHz_z_4MHz.csv',
+                dc_artiq_axial_set_file='Vs_2024-02-18_axial_1MHz.csv',
+                dc_artiq_tilt_set_file='Vs_2024-02-18_tilt_y_3MHz_z_4MHz.csv',
+                axial_electrodes=['1', '11'],
+                artiq_config=None,
+                translate_well=(False, 0),
+                make_plot=True,
                 save_result=True):
 
     '''
@@ -715,13 +727,13 @@ def solve_freqs(s, f_rad=[3e6, 4e6], f_axial=1e6, f_traprf=30e6,
     # have solved for the dc voltage sets previously.
     radial_anticonfinement = u_axial / 2
     # dc curvature scales linearly with voltage.
-    dc_div = u_axial/(2*np.array(dc_axial_ref_coeffs)[1])
+    dc_div = u_axial/(2*np.array(dc_basis_axial_ref_coeffs)[1])
     v_axial_scaling = np.max(dc_div[np.isfinite(dc_div)])
     print("DC axial voltage scales up by:", v_axial_scaling)
     print("\n")
 
     # read axial basis voltage set
-    dc_axial_set, dc_tilt_set = read_electrode_voltages([dc_axial_set_file, dc_tilt_set_file])
+    dc_axial_set, dc_tilt_set = read_electrode_voltages([dc_basis_axial_set_file, dc_basis_tilt_set_file])
     # scale up by required dc scaling
     print("Basis axial DC voltage set:\n", dc_axial_set.T)
     dc_axial_set *= v_axial_scaling
@@ -789,7 +801,7 @@ def solve_freqs(s, f_rad=[3e6, 4e6], f_axial=1e6, f_traprf=30e6,
     # scale up by required dc scaling
     v_tilt_scaling, tilt_coeff_needed = solve_tilt_scaling(
                         u_rad=u_rad,
-                        dc_tilt_ref_coeffs=dc_tilt_ref_coeffs)
+                        dc_tilt_ref_coeffs=dc_basis_tilt_ref_coeffs)
     print('Tilt coeff needed:', tilt_coeff_needed)
     ### read tilt basis voltage set
     # dc_tilt_df = pd.read_csv(dc_tilt_set_file)
@@ -800,11 +812,62 @@ def solve_freqs(s, f_rad=[3e6, 4e6], f_axial=1e6, f_traprf=30e6,
     dc_tilt_set *= v_tilt_scaling
     print("Scaled tilt DC voltage set:\n", dc_tilt_set.T)
 
-    dc_electrode_set = dc_axial_set + dc_tilt_set
-    print('Overall electrode set:', dc_electrode_set)
+    '''
+    Offset well off-center from central electrode (usually electrode id 6)
+    This helps with forming the well at trapping zone 2.
+    '''
+    saved_dc_axial_set, saved_dc_tilt_set = dc_axial_set, dc_tilt_set
+    if (translate_well[0] == True):
+        translate_well_by = int(translate_well[1])
+        voltage_sets = [dc_axial_set, dc_tilt_set]
+        results = []
+        for v_set in voltage_sets:
+            pt1 = v_set[int(axial_electrodes[0]):int(axial_electrodes[1])-1]
+            pt2 = v_set[int(axial_electrodes[1]):]
+            pt1 = np.roll(pt1, translate_well_by)
+            pt2 = np.roll(pt2, translate_well_by)
+            print('pt1', pt1)
+            print('pt2', pt2)
+            res = np.concatenate((v_set[0 : int(axial_electrodes[0])],
+                                  pt1,
+                                  [v_set[int(axial_electrodes[1])-1]],
+                                  pt2))
+            results.append(res)
+        
+        saved_dc_axial_set, saved_dc_tilt_set = results
+
+    dc_overall_set = dc_axial_set + dc_tilt_set
+    saved_dc_overall_set = saved_dc_axial_set + saved_dc_tilt_set
+    print('Overall electrode set:', dc_overall_set)
     # dc_electrode_set = dc_axial_set
-    print(dc_electrode_set)
-    with s.with_voltages(dcs=dc_electrode_set):
+    print(dc_overall_set)
+
+    if (save_result):
+        dc_scaledfreq_axial_df = pd.DataFrame(saved_dc_axial_set, columns=['V'])
+        dc_scaledfreq_tilt_df = pd.DataFrame(saved_dc_tilt_set, columns=['V'])
+        dc_scaledfreq_overall_df = pd.DataFrame(saved_dc_overall_set, columns=['V'])
+        
+        dc_scaledfreq_axial_df.to_csv(dc_scaledfreq_axial_set_file, index=False)
+        dc_scaledfreq_tilt_df.to_csv(dc_scaledfreq_tilt_set_file, index=False)
+        dc_scaledfreq_overall_df.to_csv(dc_scaledfreq_overall_set_file, index=False)
+
+    if (artiq_config is not None):
+        dc_artiq_axial = np.zeros(len(artiq_config))
+        dc_artiq_tilt = np.zeros(len(artiq_config))
+        for dac_channel, electrode_id in artiq_config.items():
+            # subtract 1 due to zero-indexing   
+            dac_channel = int(dac_channel) - 1
+            electrode_id = int(electrode_id) - 1
+            if(electrode_id != -1 and electrode_id is not None):
+                dc_artiq_axial[dac_channel] = saved_dc_axial_set[electrode_id]
+                dc_artiq_tilt[dac_channel] = saved_dc_tilt_set[electrode_id]
+
+        dc_artiq_axial_df = pd.DataFrame(dc_artiq_axial, columns=['V'])
+        dc_artiq_tilt_df = pd.DataFrame(dc_artiq_tilt, columns=['V'])
+        dc_artiq_axial_df.to_csv(dc_artiq_axial_set_file, header=None, index=False)
+        dc_artiq_tilt_df.to_csv(dc_artiq_tilt_set_file, header=None, index=False)
+
+    with s.with_voltages(dcs=dc_overall_set):
         x_guess = [0., 0., 50.]
         x0 = s.minimum(x_guess)
         ion_height = x0[2]
@@ -844,15 +907,10 @@ def solve_freqs(s, f_rad=[3e6, 4e6], f_axial=1e6, f_traprf=30e6,
         for line in s.analyze_static(x0, axis=(1, 2), m=m, q=q, l=l, o=o_traprf):
             print(line)
         '''
-        if(do_plot_potential):
+        if(make_plot):
             plot_potential(s=s, freqs=freqs, modes=modes)
             plot_field(s=s)
             plt.show()
-    
-    if (save_result):
-        overall_dc_df = pd.DataFrame(dc_electrode_set)
-        overall_dc_set_file = f'RF{round(f_traprf/1e6, 0)}MHz-trapx{round(freqs[0]/1e6, 0)}MHz-y_prime{round(freqs[1]/1e6, 0)}MHz-z_prime{round(freqs[2]/1e6, 0)}MHz-{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv'
-        overall_dc_df.to_csv(append_filepath(overall_dc_set_file), index=False)
 
 def solve_freqs_old(s, f_rad=3e6, f_split=0., f_axial=1e6, f_traprf=30e6,
                 m=40*ct.atomic_mass, q=1*ct.elementary_charge,

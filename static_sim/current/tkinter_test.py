@@ -1,9 +1,6 @@
 from trapsim import *
-# import all components
-# from the tkinter library
+
 from tkinter import *
-  
-# import filedialog module
 from tkinter import filedialog, ttk
 from tkinter.messagebox import showinfo
 import os
@@ -44,8 +41,8 @@ def radio_command():
     if(selected_trap_type.get() == trap_types[1][1]):
         # label_file_explorer.pack(fill='x', padx=5, pady=5)
         # button_explore.pack(fill='x', padx=5, pady=5)
-        label_file_selected.grid(column=1, row=1, **options)
-        button_explore.grid(column=2, row=1, **options)
+        label_file_selected.grid(column=1, row=2, **options)
+        button_explore.grid(column=2, row=2, **options)
     else:
         # label_file_explorer.pack_forget()
         # button_explore.pack_forget()
@@ -76,7 +73,7 @@ for i, trap_type in enumerate(trap_types):
 # Function for opening the 
 # file explorer window
 gds_filename = ''
-def browseGDSFiles():
+def browse_GDS_files():
     global gds_filename
     gds_filename = filedialog.askopenfilename(initialdir = os.getcwd(),
                                           title = 'Select a File',
@@ -89,7 +86,7 @@ def browseGDSFiles():
     label_file_selected.configure(text="File: " + '.../' + gds_filename.split('/')[-2] + '/' + gds_filename.split('/')[-1])
 
 electrode_config_filename = ''
-def browseJSONFiles():
+def browse_electrode_JSON_files():
     global electrode_config_filename
     electrode_config_filename = filedialog.askopenfilename(initialdir = os.getcwd(),
                                           title = 'Select a File',
@@ -102,32 +99,34 @@ def browseJSONFiles():
 # if (selected_trap_type.get() == trap_types[1][1]):
 label_config_file = Label(window, 
                             text = 'Default config selected.',
-                            height = 1)
+                            height = 1,
+                            fg='red')
 # label_file_explorer.pack(fill='x', padx=5, pady=5)
     
 label_file_selected = Label(window, 
                             text = 'No trap selected.',
-                            height = 1)
+                            height = 1,
+                            fg='red')
 
 button_explore = ttk.Button(window, 
                         text = 'Select Trap GDS',
-                        command = browseGDSFiles)
+                        command = browse_GDS_files)
 
 
 button_explore_config = ttk.Button(window, 
                         text = 'Select Config JSON',
-                        command = browseJSONFiles)
+                        command = browse_electrode_JSON_files)
 
 
 '''
 Input trap parameters.
 '''
-row = 2
+row = 1
 
 label_config_file.grid(column=1, row=row, **options)
 button_explore_config.grid(column=2, row=row, **options)
 
-row += 1
+row += 2
 # trap rf - f
 rf_label = Label(window, 
                 text = 'RF (MHz):',
@@ -136,10 +135,6 @@ rf_text = StringVar(value='35.0')
 rf_entry = ttk.Entry(textvariable=rf_text)
 rf_label.grid(column=0, row=row, **options)
 rf_entry.grid(column=1, row=row, **options)
-ion_height_label = Label(window, 
-                text = 'Ion position above trap surface: --.-- µm',
-                height = 1)
-ion_height_label.grid(column=2, row=row, **options)
 
 row += 1
 # single ion charge - q
@@ -151,7 +146,37 @@ charge_entry = ttk.Entry(textvariable=charge_text)
 charge_label.grid(column=0, row=row, **options)
 charge_entry.grid(column=1, row=row, **options)
 
+def artiq_export_check_command(row=row):
+    if(is_artiq_export.get() == 1):
+        artiq_button_explore.grid(column=2, row=row+1, **options)
+        artiq_label_file_selected.grid(column=2, row=row+2, **options)
+    else:
+        artiq_button_explore.grid_forget()
+        artiq_label_file_selected.grid_forget()
+
+artiq_config_filename = ''
+def browse_artiq_JSON_files():
+    global artiq_config_filename
+    artiq_config_filename = filedialog.askopenfilename(initialdir = os.getcwd(),
+                                          title = 'Select a File',
+                                          filetypes = (('JSON files',
+                                                        '*.json'),
+                                                       ('All files',
+                                                        '*.*')))
+    artiq_label_file_selected.configure(text="File: " + '.../' + artiq_config_filename.split('/')[-2] + '/' + artiq_config_filename.split('/')[-1])
+
+is_artiq_export = IntVar(value=1)
+artiq_export_check = ttk.Checkbutton(window, text='Export to ARTIQ-readable format?',
+                                     variable=is_artiq_export, onvalue=1, offvalue=0,
+                                     command=artiq_export_check_command)
+artiq_export_check.grid(column=2, row=row, **options)
+
 row += 1
+artiq_button_explore = ttk.Button(window, 
+                        text = 'ARTIQ DAC map JSON',
+                        command = browse_artiq_JSON_files)
+artiq_button_explore.grid(column=2, row=row, **options)
+
 # single ion mass - m
 mass_label = Label(window, 
                 text = 'Ion mass (amu):',
@@ -160,6 +185,7 @@ mass_text = StringVar(value='40.0')
 mass_entry = ttk.Entry(textvariable=mass_text)
 mass_label.grid(column=0, row=row, **options)
 mass_entry.grid(column=1, row=row, **options)
+
 
 row += 1
 # lengthscale - l
@@ -171,6 +197,12 @@ lengthscale_text = StringVar(value='1.0')
 lengthscale_entry = ttk.Entry(textvariable=lengthscale_text)
 lengthscale_label.grid(column=0, row=row, **options)
 lengthscale_entry.grid(column=1, row=row, **options)
+
+artiq_label_file_selected = Label(window, 
+                            text = 'Default ARTIQ DAC map selected.',
+                            height = 1,
+                            fg='red')
+artiq_label_file_selected.grid(column=2, row=row, **options)
 
 row += 1
 # target axial frequency
@@ -193,7 +225,25 @@ y_radial_entry = ttk.Entry(textvariable=y_radial_text)
 y_radial_label.grid(column=0, row=row, **options)
 y_radial_entry.grid(column=1, row=row, **options)
 
+def translated_well_check_command(row=row):
+    if(is_translated_export.get() == 1):
+        translated_well_entry.grid(column=2, row=row+1, **options)
+    else:
+        translated_well_entry.grid_forget()
+
+is_translated_export = IntVar(value=1)
+translated_well_check = ttk.Checkbutton(window, text='Export off-center axial well? (Enter electrode position.)',
+                                     variable=is_translated_export, onvalue=1, offvalue=0,
+                                     command=translated_well_check_command)
+translated_well_check.grid(column=2, row=row, **options)
+
+
 row += 1
+
+translated_well_text = StringVar(value='6')
+translated_well_entry = ttk.Entry(textvariable=translated_well_text)
+translated_well_entry.grid(column=2, row=row, **options)
+
 z_radial_label = Label(window, 
                 text = 'Target radial z freq. (MHz):',
                 height = 1, 
@@ -287,6 +337,7 @@ def run_simulation():
     tilt_angle_radians = np.pi / 180. * read_input_floats(tilt_angle_text)
     target_axial_coeffs = read_input_coeffs(basis_axial_text)
     target_tilt_coeffs = read_input_coeffs(basis_tilt_text)
+    translated_well_electrode_position = read_input_ints(translated_well_text)
 
     '''
     Details specific to simulation.
@@ -320,14 +371,36 @@ def run_simulation():
             electrode_config = json.load(f)
     print(electrode_config)
 
+    translate_well_by = int(translated_well_electrode_position - electrode_config.get('trap_center_electrode'))
+    axial_electrodes = electrode_config.get('axial_electrodes')
+
+    artiq_config = default_artiq_config
+    if (artiq_config_filename != ''):
+        with open(artiq_config_filename) as f:
+            artiq_config = json.load(f)
+    print(artiq_config)
+
     Vs_axial_filename = f'{today.strftime("%b%d")}_approx_Vs_axial.csv'
     Vs_tilt_filename = f'{today.strftime("%b%d")}_approx_Vs_tilt.csv'
+    Vs_scaledfreq_axial_filename = f'{today.strftime("%b%d")}_approx_Vs_axial_{np.round(f_axial/1e6)}MHz.csv'
+    Vs_scaledfreq_tilt_filename = f'{today.strftime("%b%d")}_approx_Vs_tilt_y_{np.round(f_rad_y/1e6)}MHz_z_{np.round(f_rad_z/1e6)}MHz.csv'
+    Vs_scaledfreq_overall_filename = f'{today.strftime("%b%d")}_approx_Vs_overall_x_{np.round(f_axial/1e6)}MHz_y_{np.round(f_rad_y/1e6)}MHz_z_{np.round(f_rad_z/1e6)}MHz.csv'
+    Vs_artiq_axial_filename = f'{today.strftime("%b%d")}_ARTIQ_approx_Vs_axial_{np.round(f_axial/1e6)}MHz.csv'
+    Vs_artiq_tilt_filename = f'{today.strftime("%b%d")}_ARTIQ_approx_Vs_tilt_y_{np.round(f_rad_y/1e6)}MHz_z_{np.round(f_rad_z/1e6)}MHz.csv'
+
     coeff_filename=f'{today.strftime("%b%d")}_approx_quetzal.csv'
     tilt_coeff_filename=f'{today.strftime("%b%d")}_approx_tilt_quetzal.csv'
     if (is_gds):
         print('is gds', is_gds)
         Vs_axial_filename = f'{today.strftime("%b%d")}_gds_Vs_axial.csv'
         Vs_tilt_filename = f'{today.strftime("%b%d")}_gds_Vs_tilt.csv'
+        Vs_scaledfreq_axial_filename = f'{today.strftime("%b%d")}_gds_Vs_axial_{np.round(f_axial/1e6)}MHz.csv'
+        Vs_scaledfreq_tilt_filename = f'{today.strftime("%b%d")}_gds_Vs_tilt_y_{np.round(f_rad_y/1e6)}MHz_z_{np.round(f_rad_z/1e6)}MHz.csv'
+        Vs_scaledfreq_overall_filename = f'{today.strftime("%b%d")}_gds_Vs_overall_x_{np.round(f_axial/1e6)}MHz_y_{np.round(f_rad_y/1e6)}MHz_z_{np.round(f_rad_z/1e6)}MHz.csv'
+
+        Vs_scaledfreq_artiq_axial_filename = f'{today.strftime("%b%d")}_ARTIQ_gds_Vs_axial_{np.round(f_axial/1e6)}MHz.csv'
+        Vs_scaledfreq_artiq_tilt_filename = f'{today.strftime("%b%d")}_ARTIQ_gds_Vs_tilt_y_{np.round(f_rad_y/1e6)}MHz_z_{np.round(f_rad_z/1e6)}MHz.csv'
+
         coeff_filename=f'{today.strftime("%b%d")}_gds_quetzal.csv'
         tilt_coeff_filename=f'{today.strftime("%b%d")}_gds_tilt_quetzal.csv'
         
@@ -405,11 +478,22 @@ def run_simulation():
                 f_axial=f_axial,
                 f_traprf=f_traprf,
                 m=m, q=q, l=l,
-                dc_axial_ref_coeffs=target_axial_coeffs,
-                dc_tilt_ref_coeffs=target_tilt_coeffs,
-                dc_axial_set_file=os.path.join(rundir, Vs_axial_filename),
-                dc_tilt_set_file=os.path.join(rundir, Vs_tilt_filename),
-                do_plot_potential=True,
+                dc_basis_axial_ref_coeffs=target_axial_coeffs,
+                dc_basis_tilt_ref_coeffs=target_tilt_coeffs,
+                dc_basis_axial_set_file=os.path.join(rundir, Vs_axial_filename),
+                dc_basis_tilt_set_file=os.path.join(rundir, Vs_tilt_filename),
+
+                dc_scaledfreq_axial_set_file=os.path.join(rundir, Vs_scaledfreq_axial_filename),
+                dc_scaledfreq_tilt_set_file=os.path.join(rundir, Vs_scaledfreq_tilt_filename),
+                dc_scaledfreq_overall_set_file=os.path.join(rundir, Vs_scaledfreq_overall_filename),
+
+                dc_artiq_axial_set_file=os.path.join(rundir, Vs_artiq_axial_filename),
+                dc_artiq_tilt_set_file=os.path.join(rundir, Vs_artiq_tilt_filename),
+
+                axial_electrodes=axial_electrodes,
+                artiq_config=artiq_config,
+                translate_well=(True, translate_well_by),
+                make_plot=True,
                 save_result=True)
 
     '''
@@ -417,10 +501,17 @@ def run_simulation():
     '''
     ion_height_label.configure(text=f'Ion position above trap surface: {round(ion_height, 2)} µm')
 
+row += 1
 button_simulate = ttk.Button(window, 
                         text = "Simulate",
-                        command = run_simulation)
-button_simulate.grid(column=1, row=13, **options)
+                        command = run_simulation,
+                        default='active')
+button_simulate.grid(column=1, row=row, **options)
+
+ion_height_label = Label(window, 
+                text = 'Ion position above trap surface: --.-- µm',
+                height = 1)
+ion_height_label.grid(column=2, row=row, **options)
 
 # Let the window wait for any events
 window.mainloop()
